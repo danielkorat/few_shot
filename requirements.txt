@@ -1,0 +1,5 @@
+seqeval==1.2.2
+plotly==4.14.3
+plotly-utils==0.0.3
+spacy==3.0.1
+matplotlib==3.3.4
