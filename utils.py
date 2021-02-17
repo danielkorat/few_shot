@@ -86,7 +86,8 @@ def load_all_datasets(verbose=False, train_size=100):
     lap_train, lap_test = lap_ds[:train_size], lap_ds[train_size:]
     print(f"Restaurants size (train/test): {len(res_train)}/{len(res_test)}")
     print(f"Laptops size (train/test): {len(lap_train)}/{len(lap_test)}")
-    return (res_train, res_test), (lap_train, lap_test)
+
+    return {'res': {'train': res_train, 'test': res_test}, 'lap': {'train': lap_train, 'test': lap_test}}
 
 def get_fm_pipeline(model, device=0):
     if model in models_dict:
@@ -134,9 +135,9 @@ def run_ds_examples(ds, model, **kwargs):
         print(tokens)
         print(f'gold: {aspects}\ngold_bio: {gold_bio}\nvalid_preds: {valid_preds}\npreds: {preds}\npred_bio: {pred_bio}\n')
     
-def eval_domain(domain, limit=None, **kwargs):
+def eval_ds(ds_dict, domain: str, **kwargs):
     all_preds_bio, all_preds, all_preds_meta, all_gold_bio = [], [], [], []
-    for text, tokens, gold_bio, aspects in domain_ds[domain][:limit]:
+    for text, tokens, gold_bio, aspects in ds_dict[domain]['train']:
         preds, _, pred_bio, preds_meta, hparams = run_example(text=text, tokens=tokens, **kwargs)
         all_preds.append(preds)
         all_preds_bio.append(pred_bio)
