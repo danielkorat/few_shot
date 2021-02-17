@@ -157,7 +157,7 @@ def metrics(gold, preds, domain, verbose=False, **kwargs):
         print(f'F1: {F:.3f}, P: {P:.3f}, R: {R:.3f}, {conf}')
     return {'F1': F, 'Precision': P, 'Recall': R}
 
-def post_process(domain, limit=None, thresh=-1, **kwargs):
+def post_eval(ds_dict, domain, thresh=-1, **kwargs):
     with open(f'{domain}.pkl', 'rb') as f:
         _, all_preds_meta = pickle.load(f)
 
@@ -171,7 +171,7 @@ def post_process(domain, limit=None, thresh=-1, **kwargs):
 
     all_preds_bio, all_gold_bio = [], []
     for (text, tokens, gold_bio, aspects), preds_meta in \
-        zip(domain_ds[domain][:limit], all_preds_meta[:limit]):
+        zip(ds_dict[domain]['train'], all_preds_meta):
 
         pred_lems, valid_preds, token_lems = [], [], []
         for t in tokens:
