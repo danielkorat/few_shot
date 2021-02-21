@@ -1,4 +1,6 @@
+from typing import Optional, Tuple
 from transformers import DataCollatorForLanguageModeling
+import torch
 from dataclasses import dataclass
 
 @dataclass

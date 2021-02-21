@@ -1,3 +1,4 @@
+from os import makedirs
 from transformers import pipeline
 from seqeval.metrics import f1_score, precision_score, recall_score,\
                             performance_measure
@@ -27,7 +28,7 @@ P4 = "So, this is my opinion on <mask>."
 P5 = "So, my review focuses on the <mask>."
 
 models_dict = {}
-# domain_ds = {'res': res_ds, 'lap': lap_ds}
+# domain_ds = {'rest': res_ds, 'lap': lap_ds}
 
 # nlp = spacy.load("en_core_web_sm", \
 #              disable=["parser", "ner", "entity_linker", "textcat",
@@ -87,7 +88,7 @@ def load_all_datasets(verbose=False, train_size=100):
     print(f"Restaurants size (train/test): {len(res_train)}/{len(res_test)}")
     print(f"Laptops size (train/test): {len(lap_train)}/{len(lap_test)}")
 
-    return {'res': {'train': res_train, 'test': res_test}, 'lap': {'train': lap_train, 'test': lap_test}}
+    return {'rest': {'train': res_train, 'test': res_test}, 'lap': {'train': lap_train, 'test': lap_test}}
 
 def get_fm_pipeline(model, device=0):
     if model in models_dict:
@@ -198,7 +199,7 @@ def post_eval(ds_dict, domain, thresh=-1, **kwargs):
 def eval_all(**kwargs):    
     eval_res, post_res = {}, {}
     hparams = None
-    for domain in tqdm(('res', 'lap')):
+    for domain in tqdm(('rest', 'lap')):
         for res, func in tqdm(zip((eval_res, post_res), (eval_domain, post_process))):
             func_res = func(domain, **kwargs)
             hparams = func_res.get('hparams', hparams)
@@ -223,7 +224,7 @@ def plot_per_domain(res_dicts, hparam, values, title):
     fig, axs = plt.subplots(1, 2, figsize=(20, 6), sharey=True)
     fig.suptitle(title, fontsize=20)
 
-    for i, domain in enumerate(['res', 'lap']):
+    for i, domain in enumerate(['rest', 'lap']):
         data = [d[domain]['metrics'] for d in res_dicts]
         df = pd.DataFrame(data, index=pd.Index(values, name=hparam))
         axs[i].set_yticks(np.linspace(.1, .9, num=33))
@@ -233,7 +234,7 @@ def plot_per_domain(res_dicts, hparam, values, title):
 def plot_all(eval_res, post_res, hparam, values):
     data = []
     for res_dicts in eval_res, post_res:
-        for i, domain in enumerate(['res', 'lap']):
+        for i, domain in enumerate(['rest', 'lap']):
             for res_dict, value in zip(res_dicts, values):
                 for metric, score in res_dict[domain]['metrics'].items():
                     data.append({
@@ -263,17 +264,9 @@ def apply_pattern(P1):
         return delim.join([text, P1])
     return apply
 
-def mlm_splits(ds, pattern):
+def mlm_splits(ds_dict, domain, pattern):
     P = apply_pattern(pattern)
-    split_point = int(len(ds) * 0.7)
-    mlm_train = ds[:split_point]
-    mlm_test = ds[split_point:]
-    with open('train.txt', 'w') as f:
-        f.writelines(P(x) + '\n' for x, *_ in mlm_train)
-    with open('test.txt', 'w') as f:
-        f.writelines(P(x) + '\n' for x, *_ in mlm_test)
-
-# run_mlm.py --seed=42 --num_train_epochs=2 --learning_rate=5e-04 --line_by_line \
-#     --output_dir=. --train_file=train.txt --validation_file=test.txt --per_device_train_batch_size=1 \
-#     --model_type=roberta --model_name_or_path=roberta-base --do_train --do_eval \
-#     --overwrite_output_dir --overwrite_cache --evaluation_strategy=epoch
+    makedirs('data', exist_ok=True)
+    for split in 'train', 'test':
+        with open(f'data/{domain}_{split}.txt', 'w') as f:
+            f.writelines(P(x) + '\n' for x, *_ in ds_dict[domain][split])
