@@ -2,3 +2,4 @@
 mlm_output
 pattern_mlm_model
 __pycache__
+.vscode
