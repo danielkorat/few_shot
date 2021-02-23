@@ -1,3 +1,6 @@
 .ipynb_checkpoints/Few_Shot_ABSA_v2-checkpoint.ipynb
 mlm_output
 __pycache__/*.pyc
+pattern_mlm_model
+__pycache__/*
+.vscode

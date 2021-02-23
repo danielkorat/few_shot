@@ -5,7 +5,14 @@ from dataclasses import dataclass
 
 @dataclass
 class DataCollatorForPatternLanguageModeling(DataCollatorForLanguageModeling):
-    
+
+    pattern: str = None
+
+    def __post_init__(self):
+        pattern_tokens = self.tokenizer.tokenize(self.pattern)
+        idx = pattern_tokens.index(' ' + self.tokenizer.mask_token)
+        self.pattern_mask_idx = idx - len(pattern_tokens)
+
     def mask_tokens(
         self, inputs: torch.Tensor, special_tokens_mask: Optional[torch.Tensor] = None
     ) -> Tuple[torch.Tensor, torch.Tensor]:
@@ -25,6 +32,10 @@ class DataCollatorForPatternLanguageModeling(DataCollatorForLanguageModeling):
 
         probability_matrix.masked_fill_(special_tokens_mask, value=0.0)
         masked_indices = torch.bernoulli(probability_matrix).bool()
+
+        # Pattern MLM: set pattern-mask token masking probability to 1.0:
+        # masked_indices[self.pattern_mask_idx] = 1.0
+
         labels[~masked_indices] = -100  # We only compute loss on masked tokens
 
         # 80% of the time, we replace masked input tokens with tokenizer.mask_token ([MASK])

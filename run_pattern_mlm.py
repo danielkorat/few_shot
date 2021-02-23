@@ -49,6 +49,16 @@ logger = logging.getLogger(__name__)
 MODEL_CONFIG_CLASSES = list(MODEL_FOR_MASKED_LM_MAPPING.keys())
 MODEL_TYPES = tuple(conf.model_type for conf in MODEL_CONFIG_CLASSES)
 
+@dataclass
+class PatternMLMArguments:
+    """
+    Arguments pertaining to Pattern MLM training.
+    """
+
+    pattern: str = field(
+        metadata={"help": "The mask-pattern appended to every input example."},
+    )
+
 
 @dataclass
 class ModelArguments:
@@ -158,18 +168,18 @@ class DataTrainingArguments:
                 assert extension in ["csv", "json", "txt"], "`validation_file` should be a csv, a json or a txt file."
 
 
-def main():
+def main(args):
     # See all possible arguments in src/transformers/training_args.py
     # or by passing the --help flag to this script.
     # We now keep distinct sets of args, for a cleaner separation of concerns.
 
-    parser = HfArgumentParser((ModelArguments, DataTrainingArguments, TrainingArguments))
-    if len(sys.argv) == 2 and sys.argv[1].endswith(".json"):
+    parser = HfArgumentParser((ModelArguments, DataTrainingArguments, TrainingArguments, PatternMLMArguments))
+    if len(args) == 1 and args[0].endswith(".json"):
         # If we pass only one argument to the script and it's the path to a json file,
         # let's parse it to get our arguments.
-        model_args, data_args, training_args = parser.parse_json_file(json_file=os.path.abspath(sys.argv[1]))
+        model_args, data_args, training_args, pattern_args = parser.parse_json_file(json_file=os.path.abspath(args[0]))
     else:
-        model_args, data_args, training_args = parser.parse_args_into_dataclasses()
+        model_args, data_args, training_args, pattern_args = parser.parse_args_into_dataclasses(args=args)
 
     # Detecting last checkpoint.
     last_checkpoint = None
@@ -388,7 +398,10 @@ def main():
 
     # Data collator
     # This one will take care of randomly masking the tokens.
-    data_collator = DataCollatorForPatternLanguageModeling(tokenizer=tokenizer, mlm_probability=data_args.mlm_probability)
+    data_collator = DataCollatorForPatternLanguageModeling(
+        pattern=pattern_args.pattern,
+        tokenizer=tokenizer, 
+        mlm_probability=data_args.mlm_probability)
 
     # Initialize our Trainer
     trainer = Trainer(
@@ -448,5 +461,5 @@ def _mp_fn(index):
     main()
 
 
-if __name__ == "__main__":
-    main()
+# if __name__ == "__main__":
+#     main()
