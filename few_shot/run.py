@@ -30,8 +30,8 @@ def main():
        "--output_dir", "pattern_mlm", "--train_file", "mlm_data/lap_train.txt", "--validation_file", "mlm_data/rest_test.txt",
         "--model_type", "roberta", "--model_name_or_path", "roberta-base", "--do_train", "--do_eval", 
         "--overwrite_output_dir", "--overwrite_cache", "--evaluation_strategy", "epoch",
-        "--per_device_train_batch_size", "1", "--per_device_eval_batch_size", "1", "--per_gpu_train_batch_size", "1",
-        "--per_gpu_train_batch_size", "1", "--per_gpu_eval_batch_size", "1"])
+        "--per_device_train_batch_size", "2", "--per_device_eval_batch_size", "2", "--per_gpu_train_batch_size", "2",
+        "--per_gpu_train_batch_size", "2", "--per_gpu_eval_batch_size", "2"])
 
     pattern_kwargs = dict(pattern=P5, top_k=10)
     data = load_all_datasets(train_size=200)
