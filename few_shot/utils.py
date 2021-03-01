@@ -285,7 +285,7 @@ def create_mlm_splits(ds_dict, pattern):
 def evaluate_all(lm, post=False, **kwargs):
     ds_dict = load_all_datasets(train_size=200)
 
-    with open('eval.txt', 'w') as eval_f:
+    with open(f'eval_{lm}.txt', 'w') as eval_f:
         for i, domain in enumerate(['rest', 'lap']):
             res = eval_ds(ds_dict, domain, model=lm, **kwargs)
             p, r, f1 = [f"{100. * res['metrics'][m]:.2f}" for m in ('Precision', 'Recall', 'F1')]
