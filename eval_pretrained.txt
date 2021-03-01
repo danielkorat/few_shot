@@ -1,0 +1,15 @@
+Test Domain: rest
+Metric	Score
+P	69.45
+R	50.29
+F1	58.34
+________________
+
+Test Domain: lap
+Metric	Score
+P	37.06
+R	48.26
+F1	41.92
+________________
+
+{'device': 0, 'target': True, 'thresh': -1, 'top_k': 5, 'pattern': 'So, my review focuses on the <mask>.', 'model': 'roberta-base'}

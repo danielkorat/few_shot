@@ -1,0 +1,15 @@
+Test Domain: rest
+Metric	Score
+P	56.44
+R	54.38
+F1	55.39
+________________
+
+Test Domain: lap
+Metric	Score
+P	34.74
+R	59.73
+F1	43.93
+________________
+
+{'device': 0, 'target': True, 'thresh': -1, 'top_k': 5, 'pattern': 'So, my review focuses on the <mask>.', 'model': 'pattern_mlm_model'}
