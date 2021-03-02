@@ -10,7 +10,7 @@ from sys import stdout
 import plotly.express as px
 from matplotlib import pyplot as plt
 import numpy as np
-import sys
+import seaborn as sns
 
 logging.disable(logging.WARNING)
 
@@ -19,6 +19,7 @@ from tqdm import tqdm as tq
 def tqdm(iter, **kwargs):
     return tq(list(iter), kwargs, position=0, leave=True, file=stdout)
 
+DOMAIN_NAMES = 'rest', 'lap'
 DATA_DIR = 'https://raw.githubusercontent.com/IntelLabs/nlp-architect/libert/nlp_architect/models/libert/data/'
 CSV_DATA_DIR = DATA_DIR + 'csv/spacy/domains_all/'
 JSON_DATA_DIR = DATA_DIR + 'Dai2019/semeval14/'
@@ -75,9 +76,8 @@ def load_dataset(csv_url, json_url, multi_token=False):
 
 def load_all_datasets(verbose=False, train_size=100):
     makedirs('data', exist_ok=True)
-    domain_names = 'rest', 'lap'
-    if not os.path.exists("data/lap_train.json"):   
-        for domain_name, domain in zip(domain_names, ('restaurants', 'laptops')):
+    if not os.path.exists(f"data/lap_train_{train_size}.json"):   
+        for domain_name, domain in zip(DOMAIN_NAMES, ('restaurants', 'laptops')):
             ds = load_dataset(f"{domain}.csv", f"{domain}/{domain}_train_sents.json")
             if verbose:
                 print(f'{domain} (size={len(ds)}):\n')
@@ -88,14 +88,14 @@ def load_all_datasets(verbose=False, train_size=100):
             print(f"{domain} size (train/test): {len(train)}/{len(test)}")
 
             print("Writing datest to json...")
-            with open(f"data/{domain_name}_train.json", 'w') as train_f:
+            with open(f"data/{domain_name}_train_{train_size}.json", 'w') as train_f:
                 json.dump(train, train_f)
-            with open(f"data/{domain_name}_test.json", 'w') as test_f:
+            with open(f"data/{domain_name}_test_{train_size}.json", 'w') as test_f:
                 json.dump(test, test_f)
     else:
         print("Loading dataset from json...")
-    return {domain_name: {split: json.load(open(f"data/{domain_name}_{split}.json")) for split in ('train', 'test')} \
-        for domain_name in domain_names}
+    return {domain_name: {split: json.load(open(f"data/{domain_name}_{split}_{train_size}.json")) for split in ('train', 'test')} \
+        for domain_name in DOMAIN_NAMES}
 
 def get_fm_pipeline(model, device=0):
     if model in models_dict:
@@ -143,20 +143,6 @@ def run_ds_examples(ds, model, **kwargs):
         print(tokens)
         print(f'gold: {aspects}\ngold_bio: {gold_bio}\nvalid_preds: {valid_preds}\npreds: {preds}\npred_bio: {pred_bio}\n')
     
-def eval_ds(ds_dict, domain: str, **kwargs):
-    all_preds_bio, all_preds, all_preds_meta, all_gold_bio = [], [], [], []
-    for text, tokens, gold_bio, aspects in tqdm(ds_dict[domain]['test']):
-        preds, _, pred_bio, preds_meta, hparams = run_example(text=text, tokens=tokens, **kwargs)
-        all_preds.append(preds)
-        all_preds_bio.append(pred_bio)
-        all_preds_meta.append(preds_meta)
-        all_gold_bio.append(gold_bio)
-
-    with open(f'{domain}.pkl', 'wb') as f:
-        pickle.dump((all_preds, all_preds_meta), f)
-
-    return {'metrics': metrics(all_gold_bio, all_preds_bio, domain, **kwargs), 'hparams': hparams}
-
 def metrics(gold, preds, domain, verbose=False, **kwargs):
     F, P, R, conf = (f(gold, preds) for f in (f1_score, precision_score,\
                      recall_score, performance_measure))
@@ -203,6 +189,36 @@ def post_eval(ds_dict, domain, thresh=-1, **kwargs):
         all_gold_bio.append(gold_bio)
     return {'metrics': metrics(all_gold_bio, all_preds_bio, domain)}
 
+def eval_ds(ds_dict, domain: str, **kwargs):
+    all_preds_bio, all_preds, all_preds_meta, all_gold_bio = [], [], [], []
+    for text, tokens, gold_bio, aspects in tqdm(ds_dict[domain]['test']):
+        preds, _, pred_bio, preds_meta, hparams = run_example(text=text, tokens=tokens, **kwargs)
+        all_preds.append(preds)
+        all_preds_bio.append(pred_bio)
+        all_preds_meta.append(preds_meta)
+        all_gold_bio.append(gold_bio)
+
+    with open(f'{domain}.pkl', 'wb') as f:
+        pickle.dump((all_preds, all_preds_meta), f)
+
+    return {'metrics': metrics(all_gold_bio, all_preds_bio, domain, **kwargs), 'hparams': hparams}
+
+def eval_domain(domain, **kwargs):
+    all_preds_bio, all_preds, all_preds_meta, all_gold_bio = [], [], [], []
+    for text, tokens, gold_bio, aspects in domain_ds[domain]:
+        preds, _, pred_bio, preds_meta, hparams = run_example(text=text, tokens=tokens, **kwargs)
+        all_preds.append(preds)
+        all_preds_bio.append(pred_bio)
+        all_preds_meta.append(preds_meta)
+        all_gold_bio.append(gold_bio)
+
+    # write predictions to file
+    makedirs('predictions', exist_ok=True)
+    with open(f'predictions/{domain}.pkl', 'wb') as f:
+        pickle.dump((all_preds, all_preds_meta), f)
+
+    return {'metrics': metrics(all_gold_bio, all_preds_bio, domain, **kwargs), 'hparams': hparams}
+
 def eval_all(**kwargs):    
     eval_res, post_res = {}, {}
     hparams = None
@@ -212,6 +228,43 @@ def eval_all(**kwargs):
             hparams = func_res.get('hparams', hparams)
             res[domain] = {'hparams': hparams, 'metrics': func_res['metrics']}
     return {'eval_res': eval_res, 'post_res': post_res, 'hparams': hparams}
+
+def evaluate(lm, post=False, **kwargs):
+    ds_dict = load_all_datasets(train_size=100)
+    all_res = {}
+    with open(f'eval_{lm}.txt', 'w') as eval_f:
+        for i, domain in enumerate(['rest', 'lap']):
+            res = eval_ds(ds_dict, domain, model=lm, **kwargs)
+            all_res[domain] = res
+            p, r, f1 = [f"{100. * res['metrics'][m]:.2f}" for m in ('Precision', 'Recall', 'F1')]
+
+            print(f'Test Domain: {domain}', file=eval_f)
+            writer = csv.writer(eval_f, delimiter="\t")
+            writer.writerows([['Metric', 'Score'],
+                                ['P', p],
+                                ['R', r],
+                                ['F1', f1]])
+            print("________________\n", file=eval_f)
+
+            if i == 1:
+                print(res['hparams'], file=eval_f)
+
+            if post:
+                # reads output files generated by eval_ds()
+                post_metrics = post_eval(ds_dict, domain, model=lm, **kwargs)
+                print(f"Post-Evaluation results on '{domain}' train data:\n{post_metrics}\n")
+    return all_res
+    
+def plot_per_domain(res_dicts, hparam, values, title):
+    fig, axs = plt.subplots(1, 2, figsize=(20, 6), sharey=True)
+    fig.suptitle(title, fontsize=20)
+
+    for i, domain in enumerate(['rest', 'lap']):
+        data = [d[domain]['metrics'] for d in res_dicts]
+        df = pd.DataFrame(data, index=pd.Index(values, name=hparam))
+        axs[i].set_yticks(np.linspace(.1, .9, num=33))
+        axs[i].yaxis.set_tick_params(labelbottom=True)
+        sns.lineplot(data=df, ax=axs[i]).set_title(DOMAIN_NAMES[domain])
 
 def test_hparam(hparam, values, **kwargs):
     kwargs_dict = dict(kwargs)
@@ -227,26 +280,15 @@ def test_hparam(hparam, values, **kwargs):
     final_hparams.pop(hparam)
     print(final_hparams)
 
-def plot_per_domain(res_dicts, hparam, values, title):
-    fig, axs = plt.subplots(1, 2, figsize=(20, 6), sharey=True)
-    fig.suptitle(title, fontsize=20)
-
-    for i, domain in enumerate(['rest', 'lap']):
-        data = [d[domain]['metrics'] for d in res_dicts]
-        df = pd.DataFrame(data, index=pd.Index(values, name=hparam))
-        axs[i].set_yticks(np.linspace(.1, .9, num=33))
-        axs[i].yaxis.set_tick_params(labelbottom=True)
-        sns.lineplot(data=df, ax=axs[i]).set_title(domain_names[domain])
-
-def plot_all(eval_res, post_res, hparam, values):
+def plot_all(*res_dicts, hparam, values):
     data = []
-    for res_dicts in eval_res, post_res:
+    for res_dicts in res_dicts:
         for i, domain in enumerate(['rest', 'lap']):
             for res_dict, value in zip(res_dicts, values):
                 for metric, score in res_dict[domain]['metrics'].items():
                     data.append({
                                 hparam: value,
-                                'domain': domain_names[domain],
+                                'domain': DOMAIN_NAMES[domain],
                                 'Metric': metric,
                                 'score': score,
                                 'Lemmatized': res_dicts == post_res})
@@ -282,27 +324,3 @@ def create_mlm_splits(ds_dict, pattern):
                         line = P(x).replace('<mask>', aspect) + '\n'
                         f.write(line)
 
-def evaluate_all(lm, post=False, **kwargs):
-    ds_dict = load_all_datasets(train_size=200)
-
-    with open(f'eval_{lm}.txt', 'w') as eval_f:
-        for i, domain in enumerate(['rest', 'lap']):
-            res = eval_ds(ds_dict, domain, model=lm, **kwargs)
-            p, r, f1 = [f"{100. * res['metrics'][m]:.2f}" for m in ('Precision', 'Recall', 'F1')]
-
-            print(f'Test Domain: {domain}', file=eval_f)
-            writer = csv.writer(eval_f, delimiter="\t")
-            writer.writerows([['Metric', 'Score'],
-                                ['P', p],
-                                ['R', r],
-                                ['F1', f1]])
-            print("________________\n", file=eval_f)
-
-            if i == 1:
-                print(res['hparams'], file=eval_f)
-
-            if post:
-                # reads output files generated by eval_ds()
-                post_metrics = post_eval(ds_dict, domain, model=lm, **kwargs)
-                print(f"Post-Evaluation results on '{domain}' train data:\n{post_metrics}\n")
-        
