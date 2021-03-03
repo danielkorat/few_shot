@@ -31,6 +31,8 @@ P3 = "So, the <mask> are the interesting aspect."
 P4 = "So, this is my opinion on <mask>."
 P5 = "So, my review focuses on the <mask>."
 
+PATTERNS = {'P1': P1, 'P2': P2, 'P3': P3, 'P4': P4, 'P5': P5}
+
 models_dict = {}
 # domain_ds = {'rest': res_ds, 'lap': lap_ds}
 
@@ -229,10 +231,12 @@ def eval_all(**kwargs):
             res[domain] = {'hparams': hparams, 'metrics': func_res['metrics']}
     return {'eval_res': eval_res, 'post_res': post_res, 'hparams': hparams}
 
-def evaluate(lm, post=False, **kwargs):
+def evaluate(lm, exper_name='', post=False, **kwargs):
+    if exper_name:
+        exper_name = '_' + exper_name
     ds_dict = load_all_datasets(train_size=100)
     all_res = {}
-    with open(f'eval_{lm}.txt', 'w') as eval_f:
+    with open(f'eval_{lm}{exper_name}.txt', 'w') as eval_f:
         for i, domain in enumerate(['rest', 'lap']):
             res = eval_ds(ds_dict, domain, model=lm, **kwargs)
             all_res[domain] = res
@@ -254,7 +258,7 @@ def evaluate(lm, post=False, **kwargs):
                 post_metrics = post_eval(ds_dict, domain, model=lm, **kwargs)
                 print(f"Post-Evaluation results on '{domain}' train data:\n{post_metrics}\n")
     return all_res
-    
+
 def plot_per_domain(res_dicts, hparam, values, title):
     fig, axs = plt.subplots(1, 2, figsize=(20, 6), sharey=True)
     fig.suptitle(title, fontsize=20)
@@ -313,14 +317,20 @@ def apply_pattern(P1):
         return delim.join([text, P1])
     return apply
 
-def create_mlm_splits(ds_dict, pattern):           
-    P = apply_pattern(pattern)
+def create_mlm_train_sets(ds_dict, size, pattern_name):           
+    P = apply_pattern(PATTERNS[pattern_name])
     makedirs('mlm_data', exist_ok=True)
+    actual_sizes = {}
     for domain in 'rest', 'lap':
-        for split in 'train', 'test':
-            with open(f'mlm_data/{domain}_{split}.txt', 'w') as f:
-                for x, *_, aspects in ds_dict[domain][split]:
+        count, unique_count = 0, 0
+
+        with open(f'mlm_data/{domain}_train_{size}_{pattern_name}.txt', 'w') as f:
+            for x, *_, aspects in ds_dict[domain]['train'][:size]:
+                if aspects:
+                    unique_count += 1
                     for aspect in aspects:
+                        count += 1
                         line = P(x).replace('<mask>', aspect) + '\n'
                         f.write(line)
-
+        actual_sizes[domain] = (unique_count, count)
+    return actual_sizes
