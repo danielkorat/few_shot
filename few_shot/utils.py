@@ -321,25 +321,25 @@ def plot_few_shot(train_domain, actual_num_labelled, plot_data):
             for metric, score in res_dict[test_domain]['metrics'].items():
                 data.append({
                     'num_labelled': num_labelled,
-                    'domain': DOMAIN_NAMES[test_domain],
-                    'Metric': metric,
+                    'test_domain': test_domain,
+                    'metric': metric,
                     'score': score
                     })
 
-    px.line(data, x='Num. Labelled', y='score', facet_col='domain', color='Metric', line_shape='spline',
+    px.line(data, x='num_labelled', y='score', facet_col='test_domain', color='metric', line_shape='spline',
             hover_data={
-                'Num. Labelled': False,
-                'domain': False,
-                'Metric': True,
+                'num_labelled': False,
+                'test_domain': False,
+                'metric': True,
                 'score': ":.3f"})\
-                .update_layout(title_text=f"Effect of Num. Labelled, trained on {train_domain}",
+                .update_layout(title_text=f"Effect of num_labelled, trained on {train_domain}",
                     title_x=0.5,
                     font=dict(family="Courier New, monospace", size=18),
                     hoverlabel=dict(
                         font_size=12,
                         font_family="Rockwell")
                         )\
-                .update_traces(mode="markers+lines", hovertemplate="%{customdata[2]}=%{y:.3f}<extra></extra>")\
+                .update_traces(mode="markers+lines", hovertemplate="%{customdata[1]}=%{y:.3f}<extra></extra>")\
                 .update_xaxes(showgrid=False, showspikes=True)\
                 .show()
 

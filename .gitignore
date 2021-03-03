@@ -3,3 +3,4 @@ p-mlm_model_*
 __pycache__
 .vscode
 models
+*.pkl

@@ -59,9 +59,10 @@ def few_shot_experiment(labelled_amounts, **kwargs):
         plot_few_shot(train_domain, actual_num_labelled, plot_data)
 
 def main():
-    few_shot_experiment(pattern_name='P5', labelled_amounts=range(10, 41, 10), max_steps=20, test_limit=20)
+    few_shot_experiment(pattern_name='P5', labelled_amounts=range(10, 21, 10), max_steps=10, test_limit=10)
 
 if __name__ == "__main__":
-    # main()
-    plot_few_shot('Laptops', None, pickle.load(open('plot.pkl')))
+    main()
+    # plot_few_shot('Laptops', None, pickle.load(open('plot.pkl', 'rb')))
+
 
