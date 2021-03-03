@@ -1,6 +1,7 @@
-from utils import load_all_datasets, evaluate, create_mlm_train_sets, PATTERNS
+from utils import load_all_datasets, evaluate, create_mlm_train_sets, plot_few_shot, PATTERNS
 from run_pattern_mlm import main as run_pattern_mlm
 from os import makedirs
+import pickle
 
 def pattern_mlm_preprocess(labelled_amounts, **kwargs):
     datasets = load_all_datasets()
@@ -44,9 +45,6 @@ def train_eval(train_domain, num_labelled, **kwargs):
     p_mlm_model = train_mlm(train_domain, num_labelled, **kwargs)
     return evaluate(lm=p_mlm_model, exper_name=f"{num_labelled}", **kwargs)
 
-def plot_few_shot(train_domain, actual_num_labelled, plot_data):
-    print(plot_data)
-
 def few_shot_experiment(labelled_amounts, **kwargs):
     actual_num_labelled = pattern_mlm_preprocess(labelled_amounts, **kwargs)
     pretrained_res = evaluate(lm='roberta-base', **kwargs)
@@ -57,10 +55,13 @@ def few_shot_experiment(labelled_amounts, **kwargs):
             print(f"\n{'-' * 50}\n\t\t  Num. Labelled: {num_labelled}\n{'-' * 50}")
             res = train_eval(train_domain, num_labelled, **kwargs)
             plot_data[num_labelled] = res
+        pickle.dump(plot_data, open('plot.pkl', 'wb'))
         plot_few_shot(train_domain, actual_num_labelled, plot_data)
 
 def main():
     few_shot_experiment(pattern_name='P5', labelled_amounts=range(10, 41, 10), max_steps=20, test_limit=20)
 
 if __name__ == "__main__":
-    main()
+    # main()
+    plot_few_shot('Laptops', None, pickle.load(open('plot.pkl')))
+

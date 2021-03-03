@@ -262,17 +262,6 @@ def evaluate(lm, exper_name='', post=False, **kwargs):
                 print(f"Post-Evaluation results on '{domain}' train data:\n{post_metrics}\n")
     return all_res
 
-def plot_per_domain(res_dicts, hparam, values, title):
-    fig, axs = plt.subplots(1, 2, figsize=(20, 6), sharey=True)
-    fig.suptitle(title, fontsize=20)
-
-    for i, domain in enumerate(['rest', 'lap']):
-        data = [d[domain]['metrics'] for d in res_dicts]
-        df = pd.DataFrame(data, index=pd.Index(values, name=hparam))
-        axs[i].set_yticks(np.linspace(.1, .9, num=33))
-        axs[i].yaxis.set_tick_params(labelbottom=True)
-        sns.lineplot(data=df, ax=axs[i]).set_title(DOMAIN_NAMES[domain])
-
 def test_hparam(hparam, values, **kwargs):
     kwargs_dict = dict(kwargs)
     eval_res, post_res = [], []
@@ -286,33 +275,6 @@ def test_hparam(hparam, values, **kwargs):
     final_hparams = res['hparams']
     final_hparams.pop(hparam)
     print(final_hparams)
-
-def plot_all(*res_dicts, hparam, values):
-    data = []
-    for res_dicts in res_dicts:
-        for i, domain in enumerate(['rest', 'lap']):
-            for res_dict, value in zip(res_dicts, values):
-                for metric, score in res_dict[domain]['metrics'].items():
-                    data.append({
-                                hparam: value,
-                                'domain': DOMAIN_NAMES[domain],
-                                'Metric': metric,
-                                'score': score,
-                                'Lemmatized': res_dicts == post_res})
-                    
-    fig = px.line(data, x=hparam, y='score', facet_col='domain', 
-            line_dash='Lemmatized', color='Metric', line_shape='spline', hover_data={
-                'Lemmatized': False,
-                hparam: False,
-                'domain': False,
-                'Metric': True,
-                'score': ":.3f"}).update_layout(title_text=f"Effect of '{hparam}' Value", title_x=0.5, hoverlabel=dict(
-                    font_size=12,
-                    font_family="Rockwell"),
-                    font=dict(family="Courier New, monospace", size=18))\
-            .update_traces(mode="markers+lines", hovertemplate="%{customdata[2]}=%{y:.3f}<extra></extra>")\
-            .update_xaxes(showgrid=False, showspikes=True)\
-            .show("notebook")
 
 def apply_pattern(P1):
     def apply(text):
@@ -337,3 +299,73 @@ def create_mlm_train_sets(ds_dict, size, pattern_name, **kwargs):
                         f.write(line)
         actual_sizes[domain] = (unique_count, count)
     return actual_sizes
+
+def plot_per_domain(res_dicts, hparam, values, title):
+    fig, axs = plt.subplots(1, 2, figsize=(20, 6), sharey=True)
+    fig.suptitle(title, fontsize=20)
+
+    for i, domain in enumerate(['rest', 'lap']):
+        data = [d[domain]['metrics'] for d in res_dicts]
+        df = pd.DataFrame(data, index=pd.Index(values, name=hparam))
+        axs[i].set_yticks(np.linspace(.1, .9, num=33))
+        axs[i].yaxis.set_tick_params(labelbottom=True)
+        sns.lineplot(data=df, ax=axs[i]).set_title(DOMAIN_NAMES[domain])
+
+def plot_few_shot(train_domain, actual_num_labelled, plot_data):
+    # plot_data = {0: {'lap': {'metrics': {'P': 0.8, ..}, 'hparams': '...'}, 'res': {'P': 0.7, ..}},
+             #    10: {'lap': {'P': 0.8, ..}, 'res': {'P': 0.7, ..}}, ..
+
+    data = []
+    for test_domain in 'lap', 'rest':
+        for num_labelled, res_dict in plot_data.items():
+            for metric, score in res_dict[test_domain]['metrics'].items():
+                data.append({
+                    'num_labelled': num_labelled,
+                    'domain': DOMAIN_NAMES[test_domain],
+                    'Metric': metric,
+                    'score': score
+                    })
+
+    px.line(data, x='Num. Labelled', y='score', facet_col='domain', color='Metric', line_shape='spline',
+            hover_data={
+                'Num. Labelled': False,
+                'domain': False,
+                'Metric': True,
+                'score': ":.3f"})\
+                .update_layout(title_text=f"Effect of Num. Labelled, trained on {train_domain}",
+                    title_x=0.5,
+                    font=dict(family="Courier New, monospace", size=18),
+                    hoverlabel=dict(
+                        font_size=12,
+                        font_family="Rockwell")
+                        )\
+                .update_traces(mode="markers+lines", hovertemplate="%{customdata[2]}=%{y:.3f}<extra></extra>")\
+                .update_xaxes(showgrid=False, showspikes=True)\
+                .show()
+
+def plot_all(*res_dict_list, hparam, values):
+    data = []
+    for res_dicts in res_dict_list:
+        for domain in enumerate(['rest', 'lap']):
+            for res_dict, value in zip(res_dicts, values):
+                for metric, score in res_dict[domain]['metrics'].items():
+                    data.append({
+                        hparam: value,
+                        'domain': DOMAIN_NAMES[domain],
+                        'Metric': metric,
+                        'score': score,
+                        'Lemmatized': res_dicts == post_res})
+                    
+    px.line(data, x=hparam, y='score', facet_col='domain', 
+        line_dash='Lemmatized', color='Metric', line_shape='spline', hover_data={
+            'Lemmatized': False,
+            hparam: False,
+            'domain': False,
+            'Metric': True,
+            'score': ":.3f"}).update_layout(title_text=f"Effect of '{hparam}' Value", title_x=0.5, hoverlabel=dict(
+                font_size=12,
+                font_family="Rockwell"),
+                font=dict(family="Courier New, monospace", size=18))\
+        .update_traces(mode="markers+lines", hovertemplate="%{customdata[2]}=%{y:.3f}<extra></extra>")\
+        .update_xaxes(showgrid=False, showspikes=True)\
+        .show("notebook")
