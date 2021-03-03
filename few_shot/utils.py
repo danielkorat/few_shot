@@ -1,5 +1,6 @@
 from os import makedirs
 import os
+from numpy.lib.shape_base import hsplit
 from transformers import pipeline
 from seqeval.metrics import f1_score, precision_score, recall_score,\
                             performance_measure
@@ -20,6 +21,7 @@ def tqdm(iter, **kwargs):
     return tq(list(iter), kwargs, position=0, leave=True, file=stdout)
 
 DOMAIN_NAMES = 'rest', 'lap'
+DOMAIN_TO_STR = {'rest': 'Restaurants', 'lap': 'Laptops'}
 DATA_DIR = 'https://raw.githubusercontent.com/IntelLabs/nlp-architect/libert/nlp_architect/models/libert/data/'
 CSV_DATA_DIR = DATA_DIR + 'csv/spacy/domains_all/'
 JSON_DATA_DIR = DATA_DIR + 'Dai2019/semeval14/'
@@ -99,24 +101,25 @@ def load_all_datasets(verbose=False, train_size=100):
     return {domain_name: {split: json.load(open(f"data/{domain_name}_{split}_{train_size}.json")) for split in ('train', 'test')} \
         for domain_name in DOMAIN_NAMES}
 
-def get_fm_pipeline(model, device=0):
+def get_fm_pipeline(model):
     if model in models_dict:
         fm_model = models_dict[model]
     else:
         print(f"\nLoading {model} fill-mask pipeline...\n")
         stdout.flush()
-        fm_model = pipeline('fill-mask', model=model, framework="pt", device=device)
+        fm_model = pipeline('fill-mask', model=model, framework="pt")
         models_dict[model] = fm_model
     return fm_model
 
-def run_example(text, tokens, model, pattern_name, top_k=10, thresh=-1, target=True, device=0, **kwargs):
+def run_example(text, tokens, model_name, pattern_name, top_k=10, thresh=-1, target=True, **kwargs):
     hparams = locals()
-    hparams.pop('text')
-    hparams.pop('tokens')
+    for v in 'text', 'tokens', 'kwargs':
+        hparams.pop(v)
+    hparams.update(kwargs)
 
     delim = ' ' if text[-1] in ('.', '!', '?') else '. '
     pattern = PATTERNS[pattern_name]
-    fm_pipeline = get_fm_pipeline(model)
+    fm_pipeline = get_fm_pipeline(model_name)
     pattern = pattern.replace('<mask>', f"{fm_pipeline.tokenizer.mask_token}")
     preds_meta = fm_pipeline(delim.join([text, pattern]), top_k=top_k,
                          target=tokens if target else None)
@@ -237,11 +240,11 @@ def evaluate(lm, exper_name='', post=False, **kwargs):
         exper_name = '_' + exper_name
     ds_dict = load_all_datasets(train_size=100)
     all_res = {}
-    exper_str = f"{lm.replace('/', '_')}{exper_name}"
+    exper_str = f"{lm.replace('models/', '')}{exper_name}"
     makedirs('eval', exist_ok=True)
     with open(f"eval/{exper_str}.txt", 'w') as eval_f:
         for i, domain in enumerate(['rest', 'lap']):
-            res = eval_ds(ds_dict, domain, exper_str, model=lm, **kwargs)
+            res = eval_ds(ds_dict, domain, exper_str, model_name=lm, **kwargs)
             all_res[domain] = res
             p, r, f1 = [f"{100. * res['metrics'][m]:.2f}" for m in ('Precision', 'Recall', 'F1')]
 
@@ -311,17 +314,23 @@ def plot_per_domain(res_dicts, hparam, values, title):
         axs[i].yaxis.set_tick_params(labelbottom=True)
         sns.lineplot(data=df, ax=axs[i]).set_title(DOMAIN_NAMES[domain])
 
-def plot_few_shot(train_domain, actual_num_labelled, plot_data):
-    # plot_data = {0: {'lap': {'metrics': {'P': 0.8, ..}, 'hparams': '...'}, 'res': {'P': 0.7, ..}},
-             #    10: {'lap': {'P': 0.8, ..}, 'res': {'P': 0.7, ..}}, ..
-
+def plot_few_shot(train_domain, plot_data, train_hparams, actual_num_labelled=None):
     data = []
+
+    # Format Hyperparameters
+    hp_dict = plot_data[0]['lap']['hparams']
+    hp_dict.update(train_hparams)
+    hp = list(hp_dict.items())
+    hparams = '<br>'.join([(', '.join([f"{k}: {v}" for k, v in hp[i: i + 9]])) for i in range(0, len(hp), 9)])
+    if actual_num_labelled:
+        hparams += ', actual_num_labelled: ' + str(actual_num_labelled)
+
     for test_domain in 'lap', 'rest':
         for num_labelled, res_dict in plot_data.items():
             for metric, score in res_dict[test_domain]['metrics'].items():
                 data.append({
                     'num_labelled': num_labelled,
-                    'test_domain': test_domain,
+                    'test_domain': DOMAIN_TO_STR[test_domain],
                     'metric': metric,
                     'score': score
                     })
@@ -332,7 +341,9 @@ def plot_few_shot(train_domain, actual_num_labelled, plot_data):
                 'test_domain': False,
                 'metric': True,
                 'score': ":.3f"})\
-                .update_layout(title_text=f"Effect of num_labelled, trained on {train_domain}",
+                .update_layout(title_text=f"Effect of num_labelled, trained on {DOMAIN_TO_STR[train_domain]}<br>" +\
+                    '<span style="font-size: 12px;">' + f"{hparams} </span>",
+                    margin=dict(t=220),
                     title_x=0.5,
                     font=dict(family="Courier New, monospace", size=18),
                     hoverlabel=dict(

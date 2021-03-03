@@ -15,6 +15,9 @@ def pattern_mlm_preprocess(labelled_amounts, **kwargs):
 
 def train_mlm(train_domain, num_labelled, pattern_name, seed=42, lr=1e-05, max_seq=256, max_steps=1000, batch_size=16,
             validation=None, model_type='roberta', model_name='roberta-base', **kwargs):
+    hparams = locals()
+    for v in 'train_domain', 'num_labelled', 'kwargs':
+        hparams.pop(v)
 
     os.makedirs('models', exist_ok=True)
     output_dir = f"models/p-mlm_model_{train_domain}_{num_labelled}"
@@ -41,11 +44,12 @@ def train_mlm(train_domain, num_labelled, pattern_name, seed=42, lr=1e-05, max_s
     "--line_by_line", "--output_dir", output_dir,
     "--model_type", model_type, "--model_name_or_path", model_name,
     "--do_train", "--overwrite_output_dir", "--overwrite_cache"])
-    return output_dir
+    return output_dir, hparams
 
 def train_eval(train_domain, num_labelled, **kwargs):
-    p_mlm_model = train_mlm(train_domain, num_labelled, **kwargs)
-    return evaluate(lm=p_mlm_model, exper_name=f"{num_labelled}", **kwargs)
+    p_mlm_model, hparams = train_mlm(train_domain, num_labelled, **kwargs)
+    eval_res = evaluate(lm=p_mlm_model, exper_name=f"{num_labelled}", **kwargs)
+    return eval_res, hparams
 
 def few_shot_experiment(labelled_amounts, **kwargs):
     actual_num_labelled = pattern_mlm_preprocess(labelled_amounts, **kwargs)
@@ -55,16 +59,15 @@ def few_shot_experiment(labelled_amounts, **kwargs):
         plot_data = {0: pretrained_res}
         for num_labelled in labelled_amounts:
             print(f"\n{'-' * 50}\n\t\t  Num. Labelled: {num_labelled}\n{'-' * 50}")
-            res = train_eval(train_domain, num_labelled, **kwargs)
+            res, train_hparams = train_eval(train_domain, num_labelled, **kwargs)
             plot_data[num_labelled] = res
-        pickle.dump(plot_data, open(f'{train_domain}_plot_data.pkl', 'wb'))
-        plot_few_shot(train_domain, actual_num_labelled, plot_data)
+        pickle.dump((plot_data, train_hparams), open(f'{train_domain}_plot_data.pkl', 'wb'))
+        plot_few_shot(train_domain, plot_data, train_hparams, actual_num_labelled)
 
 def main():
-    few_shot_experiment(pattern_name='P5', labelled_amounts=range(20, 101, 20), max_steps=15, test_limit=20)
+    few_shot_experiment(pattern_name='P5', labelled_amounts=range(20, 21, 20), sample_selection='positives',
+        max_steps=5, test_limit=5)
 
 if __name__ == "__main__":
     main()
-    # plot_few_shot('Laptops', None, pickle.load(open(f'lap_plot_data.pkl', 'rb')))
-
-
+    # plot_few_shot('lap', *pickle.load(open(f'lap_plot_data.pkl', 'rb')), "dfgdf")
