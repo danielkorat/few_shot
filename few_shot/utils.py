@@ -109,13 +109,13 @@ def get_fm_pipeline(model, device=0):
         models_dict[model] = fm_model
     return fm_model
 
-def run_example(text, tokens, model, pattern, top_k=10, thresh=-1, target=True, device=0):
+def run_example(text, tokens, model, pattern_name, top_k=10, thresh=-1, target=True, device=0, **kwargs):
     hparams = locals()
     hparams.pop('text')
     hparams.pop('tokens')
 
     delim = ' ' if text[-1] in ('.', '!', '?') else '. '
-    
+    pattern = PATTERNS[pattern_name]
     fm_pipeline = get_fm_pipeline(model)
     pattern = pattern.replace('<mask>', f"{fm_pipeline.tokenizer.mask_token}")
     preds_meta = fm_pipeline(delim.join([text, pattern]), top_k=top_k,
@@ -191,17 +191,18 @@ def post_eval(ds_dict, domain, thresh=-1, **kwargs):
         all_gold_bio.append(gold_bio)
     return {'metrics': metrics(all_gold_bio, all_preds_bio, domain)}
 
-def eval_ds(ds_dict, domain: str, **kwargs):
+def eval_ds(ds_dict, domain, exper_str, test_limit=None, **kwargs):
     all_preds_bio, all_preds, all_preds_meta, all_gold_bio = [], [], [], []
-    for text, tokens, gold_bio, aspects in tqdm(ds_dict[domain]['test']):
+    for text, tokens, gold_bio, aspects in tqdm(ds_dict[domain]['test'][:test_limit]):
         preds, _, pred_bio, preds_meta, hparams = run_example(text=text, tokens=tokens, **kwargs)
         all_preds.append(preds)
         all_preds_bio.append(pred_bio)
         all_preds_meta.append(preds_meta)
         all_gold_bio.append(gold_bio)
 
-    with open(f'{domain}.pkl', 'wb') as f:
-        pickle.dump((all_preds, all_preds_meta), f)
+    makedirs('predictions', exist_ok=True)
+    with open(f'predictions/{domain}_{exper_str}.json', 'w') as f:
+        json.dump((all_preds, all_preds_meta), f)
 
     return {'metrics': metrics(all_gold_bio, all_preds_bio, domain, **kwargs), 'hparams': hparams}
 
@@ -236,9 +237,11 @@ def evaluate(lm, exper_name='', post=False, **kwargs):
         exper_name = '_' + exper_name
     ds_dict = load_all_datasets(train_size=100)
     all_res = {}
-    with open(f'eval_{lm}{exper_name}.txt', 'w') as eval_f:
+    exper_str = f"{lm.replace('/', '_')}{exper_name}"
+    makedirs('eval', exist_ok=True)
+    with open(f"eval/{exper_str}.txt", 'w') as eval_f:
         for i, domain in enumerate(['rest', 'lap']):
-            res = eval_ds(ds_dict, domain, model=lm, **kwargs)
+            res = eval_ds(ds_dict, domain, exper_str, model=lm, **kwargs)
             all_res[domain] = res
             p, r, f1 = [f"{100. * res['metrics'][m]:.2f}" for m in ('Precision', 'Recall', 'F1')]
 
@@ -317,7 +320,7 @@ def apply_pattern(P1):
         return delim.join([text, P1])
     return apply
 
-def create_mlm_train_sets(ds_dict, size, pattern_name):           
+def create_mlm_train_sets(ds_dict, size, pattern_name, **kwargs):           
     P = apply_pattern(PATTERNS[pattern_name])
     makedirs('mlm_data', exist_ok=True)
     actual_sizes = {}

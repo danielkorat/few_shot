@@ -1,0 +1,15 @@
+Test Domain: rest
+Metric	Score
+P	52.17
+R	75.00
+F1	61.54
+________________
+
+Test Domain: lap
+Metric	Score
+P	12.50
+R	50.00
+F1	20.00
+________________
+
+{'kwargs': {'max_steps': 20}, 'device': 0, 'target': True, 'thresh': -1, 'top_k': 10, 'pattern_name': 'P5', 'model': 'models/p-mlm_model_rest_20'}
