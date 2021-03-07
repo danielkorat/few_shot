@@ -31,11 +31,13 @@ class DataCollatorForPatternLanguageModeling(DataCollatorForLanguageModeling):
             special_tokens_mask = special_tokens_mask.bool()
 
         probability_matrix.masked_fill_(special_tokens_mask, value=0.0)
-        masked_indices = torch.bernoulli(probability_matrix).bool()
 
         # Pattern MLM: set pattern-mask token masking probability to 1.0:
-        # masked_indices[self.pattern_mask_idx] = 1.0
+        for label_vector, prob_vector in zip( labels.tolist(), probability_matrix):
+            mask_idx = (label_vector + [1]).index(1) + self.pattern_mask_idx - 1
+            prob_vector[mask_idx] = 1.0
 
+        masked_indices = torch.bernoulli(probability_matrix).bool()
         labels[~masked_indices] = -100  # We only compute loss on masked tokens
 
         # 80% of the time, we replace masked input tokens with tokenizer.mask_token ([MASK])
