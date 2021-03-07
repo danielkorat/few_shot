@@ -27,6 +27,7 @@ P2 = "So, the interesting aspect is <mask>."
 P3 = "So, the <mask> are the interesting aspect."
 P4 = "So, this is my opinion on <mask>."
 P5 = "So, my review focuses on the <mask>."
+P6 = "So, the <mask> is wonderful."
 
 models_dict = {}
 # domain_ds = {'rest': res_ds, 'lap': lap_ds}
@@ -139,13 +140,15 @@ def run_ds_examples(ds, model, **kwargs):
         preds, valid_preds, pred_bio, _, _ = run_example(model=model, text=text, tokens=tokens, **kwargs)
         print(i, text)
         print(tokens)
-        print(f'gold: {aspects}\ngold_bio: {gold_bio}\nvalid_preds: {valid_preds}\npreds: {preds}\npred_bio: {pred_bio}\n')
-    
+        #print(f'gold: {aspects}\ngold_bio: {gold_bio}\nvalid_preds: {valid_preds}\npreds: {preds}\npred_bio: {pred_bio}\n')
+        print(f'gold: {aspects}\nvalid_preds: {[x for x,_ in valid_preds]}\npreds: {preds}\n')
+
 def eval_ds(ds_dict, domain: str, **kwargs):
-    all_preds_bio, all_preds, all_preds_meta, all_gold_bio = [], [], [], []
+    all_preds_bio, all_preds, all_valid_preds, all_preds_meta, all_gold_bio = [], [], [], [], []
     for text, tokens, gold_bio, aspects in ds_dict[domain]['train']:
-        preds, _, pred_bio, preds_meta, hparams = run_example(text=text, tokens=tokens, **kwargs)
+        preds, valid_preds, pred_bio, preds_meta, hparams = run_example(text=text, tokens=tokens, **kwargs)
         all_preds.append(preds)
+        all_valid_preds.append(valid_preds)
         all_preds_bio.append(pred_bio)
         all_preds_meta.append(preds_meta)
         all_gold_bio.append(gold_bio)
