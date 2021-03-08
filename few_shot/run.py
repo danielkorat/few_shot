@@ -3,13 +3,13 @@ from run_pattern_mlm import main as run_pattern_mlm
 import os
 import pickle
 
-def pattern_mlm_preprocess(labelled_amounts, **kwargs):
+def pattern_mlm_preprocess(labelled_amounts, sample_selection, **kwargs):
     datasets = load_all_datasets()
     res = {}
     # Prepare Pattern-MLM Training
     # Write splits to '/mlm_data'
     for num_labelled in labelled_amounts:
-        amounts = create_mlm_train_sets(datasets, num_labelled, **kwargs)
+        amounts = create_mlm_train_sets(datasets, num_labelled, sample_selection, **kwargs)
         res[num_labelled] = amounts
     return res
 
@@ -27,7 +27,7 @@ def train_mlm(train_domain, num_labelled, pattern_name, seed=42, lr=1e-05, max_s
     # every batch: 4 labelled + 12 unlabelled
     # os.environ["CUDA_VISIBLE_DEVICES"] = "0"
 
-    os.environ["TOKENIZERS_PARALLELISM"] = 'false'
+    # os.environ["TOKENIZERS_PARALLELISM"] = 'false'
 
     run_pattern_mlm([
     "--pattern", PATTERNS[pattern_name],
@@ -61,13 +61,23 @@ def few_shot_experiment(labelled_amounts, **kwargs):
             print(f"\n{'-' * 50}\n\t\t  Num. Labelled: {num_labelled}\n{'-' * 50}")
             res, train_hparams = train_eval(train_domain, num_labelled, **kwargs)
             plot_data[num_labelled] = res
-        pickle.dump((plot_data, train_hparams), open(f'{train_domain}_plot_data.pkl', 'wb'))
+        with open(f'{train_domain}_plot_data.pkl', 'wb') as f:
+            pickle.dump((plot_data, train_hparams, actual_num_labelled), f)
         plot_few_shot(train_domain, plot_data, train_hparams, actual_num_labelled)
 
+
+def evaluate_patterns(pattern_names_list=(['P1', 'P2'], ['P2']), lm='roberta-base', **kwargs):
+    for pattern_names in pattern_names_list:
+        evaluate(lm=lm, pattern_names=pattern_names, **kwargs)
+
+
 def main():
-    few_shot_experiment(pattern_name='P5', labelled_amounts=range(20, 21, 20), sample_selection='positives',
-        max_steps=5, test_limit=5)
+    # sample_selection= 'conservative' / 'exact_positives' / 'negatives_with_None'
+    few_shot_experiment(pattern_name='P5', labelled_amounts=range(20, 101, 20), sample_selection='conservative')
+        # max_steps=5, test_limit=5)
+
 
 if __name__ == "__main__":
-    main()
-    # plot_few_shot('lap', *pickle.load(open(f'lap_plot_data.pkl', 'rb')), "dfgdf")
+    # main()
+    plot_few_shot('lap', *pickle.load(open(f'lap_plot_data.pkl', 'rb')))
+    plot_few_shot('rest', *pickle.load(open(f'rest_plot_data.pkl', 'rb')))

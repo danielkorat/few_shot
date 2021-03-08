@@ -285,7 +285,7 @@ def apply_pattern(P1):
         return delim.join([text, P1])
     return apply
 
-def create_mlm_train_sets(ds_dict, size, pattern_name, **kwargs):           
+def create_mlm_train_sets(ds_dict, size, sample_selection, pattern_name, **kwargs):           
     P = apply_pattern(PATTERNS[pattern_name])
     makedirs('mlm_data', exist_ok=True)
     actual_sizes = {}
@@ -293,13 +293,28 @@ def create_mlm_train_sets(ds_dict, size, pattern_name, **kwargs):
         count, unique_count = 0, 0
 
         with open(f'mlm_data/{domain}_train_{size}_{pattern_name}.txt', 'w') as f:
-            for x, *_, aspects in ds_dict[domain]['train'][:size]:
-                if aspects:
-                    unique_count += 1
-                    for aspect in aspects:
-                        count += 1
-                        line = P(x).replace('<mask>', aspect) + '\n'
-                        f.write(line)
+            if sample_selection == 'conservative':
+                for x, *_, aspects in ds_dict[domain]['train'][:size]:
+                    if aspects:
+                        unique_count += 1
+                        for aspect in aspects:
+                            count += 1
+                            line = P(x).replace('<mask>', aspect) + '\n'
+                            f.write(line)
+
+            elif sample_selection == 'exact_positives':
+                for x, *_, aspects in ds_dict[domain]['train']:
+                    if aspects:
+                        unique_count += 1
+                        for aspect in aspects:
+                            count += 1
+                            line = P(x).replace('<mask>', aspect) + '\n'
+                            f.write(line)
+                    if unique_count == size:
+                        break
+                if unique_count != size:
+                    print(unique_count)
+                    assert False
         actual_sizes[domain] = (unique_count, count)
     return actual_sizes
 
