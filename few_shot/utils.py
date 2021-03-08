@@ -32,6 +32,7 @@ P2 = "So, the interesting aspect is <mask>."
 P3 = "So, the <mask> are the interesting aspect."
 P4 = "So, this is my opinion on <mask>."
 P5 = "So, my review focuses on the <mask>."
+P6 = "So, the <mask> is wonderful."
 
 PATTERNS = {'P1': P1, 'P2': P2, 'P3': P3, 'P4': P4, 'P5': P5}
 

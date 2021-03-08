@@ -7,3 +7,4 @@ models
 predictions
 mlm_data
 predictions/lap_roberta-base.json
+.venv
