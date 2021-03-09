@@ -34,7 +34,7 @@ P4 = "So, this is my opinion on <mask>."
 P5 = "So, my review focuses on the <mask>."
 P6 = "So, the <mask> is wonderful."
 
-PATTERNS = {'P1': P1, 'P2': P2, 'P3': P3, 'P4': P4, 'P5': P5}
+PATTERNS = {'P1': P1, 'P2': P2, 'P3': P3, 'P4': P4, 'P5': P5, 'P6': P6}
 
 models_dict = {}
 # domain_ds = {'rest': res_ds, 'lap': lap_ds}
@@ -112,21 +112,47 @@ def get_fm_pipeline(model):
         models_dict[model] = fm_model
     return fm_model
 
-def run_example(text, tokens, model_name, pattern_name, top_k=10, thresh=-1, target=True, **kwargs):
+def fill_mask_preds(fm_pipeline, text, tokens, pattern, top_k, target):
+    delim = ' ' if text[-1] in ('.', '!', '?') else '. '
+    pattern = pattern.replace('<mask>', f"{fm_pipeline.tokenizer.mask_token}")
+    mask_preds = fm_pipeline(delim.join([text, pattern]), top_k=top_k,
+                            target=tokens if target else None)
+        
+    return(mask_preds)
+
+
+def run_example(text, tokens, model_name, pattern_names, top_k=10, thresh=-1, target=True, **kwargs):
     hparams = locals()
     for v in 'text', 'tokens', 'kwargs':
         hparams.pop(v)
     hparams.update(kwargs)
-
-    delim = ' ' if text[-1] in ('.', '!', '?') else '. '
-    pattern = PATTERNS[pattern_name]
+    
     fm_pipeline = get_fm_pipeline(model_name)
-    pattern = pattern.replace('<mask>', f"{fm_pipeline.tokenizer.mask_token}")
-    preds_meta = fm_pipeline(delim.join([text, pattern]), top_k=top_k,
-                         target=tokens if target else None)
+
+#---------- new start ------------------------------------
+    # Single patterns
+    if len(pattern_names) == 1:
+        pattern = PATTERNS[pattern_names[0]]
+
+        mask_preds = fill_mask_preds(fm_pipeline, text, tokens, pattern, top_k, target)
+        
+    # Multiple patterns
+    else:
+        mask_preds_all = []
+        for pattern_name in pattern_names:
+            pattern = PATTERNS[pattern_name]
+            pattern = pattern.replace('<mask>', f"{fm_pipeline.tokenizer.mask_token}")
+            mask_preds = fm_pipeline(delim.join([text, pattern]), top_k=top_k,
+                                target=tokens if target else None)
+        mask_preds_all.append(mask_preds)
+        
+        #mask_preds = merge_mask_preds(mask_preds_all, strategy='union')
+
+ #---------- new end ------------------------------------
+
     preds, valid_preds, valid_idx = [], [], set()
 
-    for pred in preds_meta:
+    for pred in mask_preds:
         pred_token, score = pred['token_str'].lstrip(), pred['score']
         preds.append(pred_token)
 
@@ -139,12 +165,12 @@ def run_example(text, tokens, model_name, pattern_name, top_k=10, thresh=-1, tar
                 pass
 
     pred_bio = ['B-ASP' if i in valid_idx else 'O' for i in range(len(tokens))]
-    return preds, valid_preds, pred_bio, preds_meta, hparams
+    return preds, valid_preds, pred_bio, mask_preds, hparams
 
-def run_ds_examples(ds, model, **kwargs):
+def run_ds_examples(ds, model_name, pattern_name, **kwargs):
     print(f"Pattern: {kwargs['pattern']}\n")
     for i, (text, tokens, gold_bio, aspects) in tqdm(enumerate(ds)):
-        preds, valid_preds, pred_bio, _, _ = run_example(model=model, text=text, tokens=tokens, **kwargs)
+        preds, valid_preds, pred_bio, _, _ = run_example(text=text, tokens=tokens, model_name=model_name, pattern_name=pattern_name, **kwargs)
         print(i, text)
         print(tokens)
         print(f'gold: {aspects}\ngold_bio: {gold_bio}\nvalid_preds: {valid_preds}\npreds: {preds}\npred_bio: {pred_bio}\n')
@@ -159,7 +185,7 @@ def metrics(gold, preds, domain, verbose=False, **kwargs):
 
 def post_eval(ds_dict, domain, thresh=-1, **kwargs):
     with open(f'{domain}.pkl', 'rb') as f:
-        _, all_preds_meta = pickle.load(f)
+        _, all_mask_preds = pickle.load(f)
 
     nlp = spacy.load("en_core_web_sm", \
                      disable=["parser", "ner", "entity_linker", "textcat",
@@ -170,8 +196,8 @@ def post_eval(ds_dict, domain, thresh=-1, **kwargs):
     # TODO: lemmatize sentences, not token lists
 
     all_preds_bio, all_gold_bio = [], []
-    for (text, tokens, gold_bio, aspects), preds_meta in \
-        zip(ds_dict[domain]['train'], all_preds_meta):
+    for (text, tokens, gold_bio, aspects), mask_preds in \
+        zip(ds_dict[domain]['train'], all_mask_preds):
 
         pred_lems, valid_preds, token_lems = [], [], []
         for t in tokens:
@@ -179,7 +205,7 @@ def post_eval(ds_dict, domain, thresh=-1, **kwargs):
             token_lems.append(toks[0].lemma_ if toks else [''])
 
         valid_idx = set()
-        for pred in preds_meta:
+        for pred in mask_preds:
             pred_token = pred['token_str'].lstrip() #'Ġ'
             score = pred['score']
             if score > thresh:
@@ -195,34 +221,35 @@ def post_eval(ds_dict, domain, thresh=-1, **kwargs):
         all_gold_bio.append(gold_bio)
     return {'metrics': metrics(all_gold_bio, all_preds_bio, domain)}
 
-def eval_ds(ds_dict, domain, exper_str, test_limit=None, **kwargs):
-    all_preds_bio, all_preds, all_preds_meta, all_gold_bio = [], [], [], []
+def eval_ds(ds_dict, domain, model_name, pattern_names, exper_str, test_limit=None, **kwargs):
+    all_preds_bio, all_preds, all_valid_preds, all_mask_preds, all_gold_bio = [], [], [], [], []
     for text, tokens, gold_bio, aspects in tqdm(ds_dict[domain]['test'][:test_limit]):
-        preds, _, pred_bio, preds_meta, hparams = run_example(text=text, tokens=tokens, **kwargs)
+        preds, valid_preds, pred_bio, mask_preds, hparams = run_example(text=text, tokens=tokens, model_name=model_name, pattern_names=pattern_names,  **kwargs)                                                  
         all_preds.append(preds)
+        all_valid_preds.append(valid_preds)
         all_preds_bio.append(pred_bio)
-        all_preds_meta.append(preds_meta)
+        all_mask_preds.append(mask_preds)
         all_gold_bio.append(gold_bio)
 
     makedirs('predictions', exist_ok=True)
     with open(f'predictions/{domain}_{exper_str}.json', 'w') as f:
-        json.dump((all_preds, all_preds_meta), f)
+        json.dump((all_preds, all_mask_preds), f)
 
     return {'metrics': metrics(all_gold_bio, all_preds_bio, domain, **kwargs), 'hparams': hparams}
 
 def eval_domain(domain, **kwargs):
-    all_preds_bio, all_preds, all_preds_meta, all_gold_bio = [], [], [], []
+    all_preds_bio, all_preds, all_mask_preds, all_gold_bio = [], [], [], []
     for text, tokens, gold_bio, aspects in domain_ds[domain]:
-        preds, _, pred_bio, preds_meta, hparams = run_example(text=text, tokens=tokens, **kwargs)
+        preds, _, pred_bio, mask_preds, hparams = run_example(text=text, tokens=tokens, **kwargs)
         all_preds.append(preds)
         all_preds_bio.append(pred_bio)
-        all_preds_meta.append(preds_meta)
+        all_mask_preds.append(mask_preds)
         all_gold_bio.append(gold_bio)
 
     # write predictions to file
     makedirs('predictions', exist_ok=True)
     with open(f'predictions/{domain}.pkl', 'wb') as f:
-        pickle.dump((all_preds, all_preds_meta), f)
+        pickle.dump((all_preds, all_mask_preds), f)
 
     return {'metrics': metrics(all_gold_bio, all_preds_bio, domain, **kwargs), 'hparams': hparams}
 
