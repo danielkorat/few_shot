@@ -12,6 +12,8 @@ import plotly.express as px
 from matplotlib import pyplot as plt
 import numpy as np
 import seaborn as sns
+from extract_aspects import extract_aspects_from_sentence
+
 
 logging.disable(logging.WARNING)
 
@@ -40,7 +42,7 @@ P10 = "So, I am talking about the <mask>."
 
 PATTERNS = {'P1': P1, 'P2': P2, 'P3': P3, 'P4': P4, 'P5': P5, 'P6': P6, 'P7': P7, 'P8': P8, 'P9': P9, 'P10': P10}
 
-models_dict = {}
+# models_dict = {}
 # domain_ds = {'rest': res_ds, 'lap': lap_ds}
 
 # nlp = spacy.load("en_core_web_sm", \
@@ -106,82 +108,93 @@ def load_all_datasets(verbose=False, train_size=100):
     return {domain_name: {split: json.load(open(f"data/{domain_name}_{split}_{train_size}.json")) for split in ('train', 'test')} \
         for domain_name in DOMAIN_NAMES}
 
-def get_fm_pipeline(model):
-    if model in models_dict:
-        fm_model = models_dict[model]
-    else:
-        print(f"\nLoading {model} fill-mask pipeline...\n")
-        stdout.flush()
-        fm_model = pipeline('fill-mask', model=model, framework="pt")
-        models_dict[model] = fm_model
-    return fm_model
+# def get_fm_pipeline(model):
+#     if model in models_dict:
+#         fm_model = models_dict[model]
+#     else:
+#         print(f"\nLoading {model} fill-mask pipeline...\n")
+#         stdout.flush()
+#         fm_model = pipeline('fill-mask', model=model, framework="pt")
+#         models_dict[model] = fm_model
+#     return fm_model
 
-def fill_mask_preds(fm_pipeline, text, tokens, pattern, top_k, target):
-    delim = ' ' if text[-1] in ('.', '!', '?') else '. '
-    pattern = pattern.replace('<mask>', f"{fm_pipeline.tokenizer.mask_token}")
-    mask_preds = fm_pipeline(delim.join([text, pattern]), top_k=top_k,
-                            target=tokens if target else None)
+# def fill_mask_preds(fm_pipeline, text, tokens, pattern, top_k, target):
+#     delim = ' ' if text[-1] in ('.', '!', '?') else '. '
+#     pattern = pattern.replace('<mask>', f"{fm_pipeline.tokenizer.mask_token}")
+#     mask_preds = fm_pipeline(delim.join([text, pattern]), top_k=top_k,
+#                             target=tokens if target else None)
         
-    return(mask_preds)
+#     return(mask_preds)
 
-def run_example(text, tokens, model_name, pattern_names, top_k=10, thresh=-1, target=True, **kwargs):
-    hparams = locals()
-    for v in 'text', 'tokens', 'kwargs':
-        hparams.pop(v)
-    hparams.update(kwargs)
+# def extract_aspects_from_sentence(text, tokens, model_name, pattern_names, top_k=10, thresh=-1, target=True, **kwargs):
+#     hparams = locals()
+#     for v in 'text', 'tokens', 'kwargs':
+#         hparams.pop(v)
+#     hparams.update(kwargs)
+#     fm_pipeline = get_fm_pipeline(model_name)
+
+#     # Single patterns
+#     if len(pattern_names) == 1:
+#         pattern = PATTERNS[pattern_names[0]]
+#         mask_preds = fill_mask_preds(fm_pipeline, text, tokens, pattern, top_k, target)
+        
+#     # Multiple patterns
+#     else:
+#         mask_preds_all = []
+#         for pattern_name in pattern_names:
+#             pattern = PATTERNS[pattern_name]
+#             mask_preds = fill_mask_preds(fm_pipeline, text, tokens, pattern, top_k, target)
+#             mask_preds_all.append(mask_preds)
+        
+#         mask_preds = merge_mask_preds(mask_preds_all=mask_preds_all, strategy='union')
+
+#     preds = [pred['token_str'].lstrip() for pred in mask_preds]
+
+#     # validate - make sure token exists in sentece
+#     valid_preds, pred_bio = validate_pred_tokens(tokens, mask_preds, thresh = thresh)
     
-    fm_pipeline = get_fm_pipeline(model_name)
+#     return preds, valid_preds, pred_bio, mask_preds, hparams
 
-    # Single patterns
-    if len(pattern_names) == 1:
-        pattern = PATTERNS[pattern_names[0]]
+# def validate_pred_tokens(tokens, mask_preds, thresh=-1):
+#     valid_preds, valid_idx = [], set()
 
-        mask_preds = fill_mask_preds(fm_pipeline, text, tokens, pattern, top_k, target)
-        
-    # Multiple patterns
-    else:
-        mask_preds_all = []
-        for pattern_name in pattern_names:
-            pattern = PATTERNS[pattern_name]
-            mask_preds = fill_mask_preds(fm_pipeline, text, tokens, pattern, top_k, target)
-            mask_preds_all.append(mask_preds)
-        
-        mask_preds = merge_mask_preds(mask_preds_all=mask_preds_all, strategy='union')
+#     for pred in mask_preds:
+#         pred_token, score = pred['token_str'].lstrip(), pred['score']
 
-    preds, valid_preds, valid_idx = [], [], set()
+#         if score > thresh:
+#             try:
+#                 idx = tokens.index(pred_token)
+#                 valid_idx.add(idx)
+#                 if (is_noun_token(tokens, idx)):
+#                     valid_preds.append((pred_token, f"{score:.3f}"))
+#             except ValueError:
+#                 pass
 
-    for pred in mask_preds:
-        pred_token, score = pred['token_str'].lstrip(), pred['score']
-        preds.append(pred_token)
+#     pred_bio = ['B-ASP' if i in valid_idx else 'O' for i in range(len(tokens))]
 
-        if score > thresh:
-            try:
-                idx = tokens.index(pred_token)
-                valid_idx.add(idx)
-                valid_preds.append((pred_token, f"{score:.3f}"))
-            except ValueError:
-                pass
+#     return valid_preds, pred_bio
 
-    pred_bio = ['B-ASP' if i in valid_idx else 'O' for i in range(len(tokens))]
-    return preds, valid_preds, pred_bio, mask_preds, hparams
+# def is_noun_token(tokens, idx):
 
 
-def merge_mask_preds(mask_preds_all, strategy='union'):
+#     return True
+
+# def merge_mask_preds(mask_preds_all, strategy='union'):
     
-    if strategy=='union':
-        unified_preds = mask_preds_all[0]
-        for mask_preds in mask_preds_all[1:]:
-            for pred in mask_preds:
-                pred_tokens = pred['token']
-                if pred_tokens not in [pred['token'] for pred in unified_preds]:
-                    unified_preds.append(pred)
+#     if strategy=='union':
+#         unified_preds = mask_preds_all[0]
+#         for mask_preds in mask_preds_all[1:]:
+#             for pred in mask_preds:
+#                 pred_tokens = pred['token']
+#                 if pred_tokens not in [pred['token'] for pred in unified_preds]:
+#                     unified_preds.append(pred)
 
-    return unified_preds
+#     return unified_preds
 
 def run_ds_examples(ds, model_name, pattern_name, **kwargs):
     print(f"Pattern: {kwargs['pattern']}\n")
     for i, (text, tokens, gold_bio, aspects) in tqdm(enumerate(ds)):
-        preds, valid_preds, pred_bio, _, _ = run_example(text=text, tokens=tokens, model_name=model_name, pattern_name=pattern_name, **kwargs)
+        preds, valid_preds, pred_bio, _, _ = extract_aspects_from_sentence(PATTERNS=PATTERNS, text=text, tokens=tokens, model_name=model_name, pattern_name=pattern_name, **kwargs)
         print(i, text)
         print(tokens)
         print(f'gold: {aspects}\ngold_bio: {gold_bio}\nvalid_preds: {valid_preds}\npreds: {preds}\npred_bio: {pred_bio}\n')
@@ -236,7 +249,7 @@ def post_eval(ds_dict, domain, thresh=-1, **kwargs):
 def eval_ds(ds_dict, domain, model_name, pattern_names, exper_str, test_limit=None, **kwargs):
     all_preds_bio, all_preds, all_valid_preds, all_mask_preds, all_gold_bio = [], [], [], [], []
     for text, tokens, gold_bio, aspects in tqdm(ds_dict[domain]['test'][:test_limit]):
-        preds, valid_preds, pred_bio, mask_preds, hparams = run_example(text=text, tokens=tokens, model_name=model_name, pattern_names=pattern_names,  **kwargs)                                                  
+        preds, valid_preds, pred_bio, mask_preds, hparams = extract_aspects_from_sentence(PATTERNS=PATTERNS, text=text, tokens=tokens, model_name=model_name, pattern_names=pattern_names,  **kwargs)                                                  
         all_preds.append(preds)
         all_valid_preds.append(valid_preds)
         all_preds_bio.append(pred_bio)
@@ -252,7 +265,7 @@ def eval_ds(ds_dict, domain, model_name, pattern_names, exper_str, test_limit=No
 def eval_domain(domain, **kwargs):
     all_preds_bio, all_preds, all_mask_preds, all_gold_bio = [], [], [], []
     for text, tokens, gold_bio, aspects in domain_ds[domain]:
-        preds, _, pred_bio, mask_preds, hparams = run_example(text=text, tokens=tokens, **kwargs)
+        preds, _, pred_bio, mask_preds, hparams = extract_aspects_from_sentence(PATTERNS=PATTERNS, text=text, tokens=tokens, **kwargs)
         all_preds.append(preds)
         all_preds_bio.append(pred_bio)
         all_mask_preds.append(mask_preds)

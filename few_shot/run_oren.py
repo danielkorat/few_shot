@@ -67,7 +67,7 @@ def few_shot_experiment(labelled_amounts, **kwargs):
 
 def eval_pretrained():
     pattern_kwargs = dict(pattern='P5', top_k=10)
-    data = load_all_datasets(train_size=200)
+    data = load_all_datasets(train_size=2200)
     
     pattern_groups=(['P5'],['P5','P6'])
     #pattern_groups=(['P1', 'P2', 'P3', 'P4', 'P5', 'P6', 'P7'], ['P1', 'P2', 'P3', 'P4', 'P5', 'P6', 'P7', 'P8'], ['P1', 'P2', 'P3', 'P4', 'P5', 'P6', 'P7', 'P8', 'P9'], ['P1', 'P2', 'P3', 'P4', 'P5', 'P6', 'P7', 'P8', 'P9', 'P10'])
