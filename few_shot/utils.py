@@ -33,8 +33,12 @@ P3 = "So, the <mask> are the interesting aspect."
 P4 = "So, this is my opinion on <mask>."
 P5 = "So, my review focuses on the <mask>."
 P6 = "So, the <mask> is wonderful."
+P7 = "So, the <mask> is awful."
+P8 = "So, the main topic is the <mask>."
+P9 = "So, it is all about the <mask>."
+P10 = "So, I am talking about the <mask>."
 
-PATTERNS = {'P1': P1, 'P2': P2, 'P3': P3, 'P4': P4, 'P5': P5, 'P6': P6}
+PATTERNS = {'P1': P1, 'P2': P2, 'P3': P3, 'P4': P4, 'P5': P5, 'P6': P6, 'P7': P7, 'P8': P8, 'P9': P9, 'P10': P10}
 
 models_dict = {}
 # domain_ds = {'rest': res_ds, 'lap': lap_ds}
@@ -120,7 +124,6 @@ def fill_mask_preds(fm_pipeline, text, tokens, pattern, top_k, target):
         
     return(mask_preds)
 
-
 def run_example(text, tokens, model_name, pattern_names, top_k=10, thresh=-1, target=True, **kwargs):
     hparams = locals()
     for v in 'text', 'tokens', 'kwargs':
@@ -129,7 +132,6 @@ def run_example(text, tokens, model_name, pattern_names, top_k=10, thresh=-1, ta
     
     fm_pipeline = get_fm_pipeline(model_name)
 
-#---------- new start ------------------------------------
     # Single patterns
     if len(pattern_names) == 1:
         pattern = PATTERNS[pattern_names[0]]
@@ -141,14 +143,10 @@ def run_example(text, tokens, model_name, pattern_names, top_k=10, thresh=-1, ta
         mask_preds_all = []
         for pattern_name in pattern_names:
             pattern = PATTERNS[pattern_name]
-            pattern = pattern.replace('<mask>', f"{fm_pipeline.tokenizer.mask_token}")
-            mask_preds = fm_pipeline(delim.join([text, pattern]), top_k=top_k,
-                                target=tokens if target else None)
-        mask_preds_all.append(mask_preds)
+            mask_preds = fill_mask_preds(fm_pipeline, text, tokens, pattern, top_k, target)
+            mask_preds_all.append(mask_preds)
         
-        #mask_preds = merge_mask_preds(mask_preds_all, strategy='union')
-
- #---------- new end ------------------------------------
+        mask_preds = merge_mask_preds(mask_preds_all=mask_preds_all, strategy='union')
 
     preds, valid_preds, valid_idx = [], [], set()
 
@@ -167,6 +165,19 @@ def run_example(text, tokens, model_name, pattern_names, top_k=10, thresh=-1, ta
     pred_bio = ['B-ASP' if i in valid_idx else 'O' for i in range(len(tokens))]
     return preds, valid_preds, pred_bio, mask_preds, hparams
 
+
+def merge_mask_preds(mask_preds_all, strategy='union'):
+    
+    if strategy=='union':
+        unified_preds = mask_preds_all[0]
+        for mask_preds in mask_preds_all[1:]:
+            for pred in mask_preds:
+                pred_tokens = pred['token']
+                if pred_tokens not in [pred['token'] for pred in unified_preds]:
+                    unified_preds.append(pred)
+
+    return unified_preds
+
 def run_ds_examples(ds, model_name, pattern_name, **kwargs):
     print(f"Pattern: {kwargs['pattern']}\n")
     for i, (text, tokens, gold_bio, aspects) in tqdm(enumerate(ds)):
@@ -180,8 +191,9 @@ def metrics(gold, preds, domain, verbose=False, **kwargs):
                      recall_score, performance_measure))
     if verbose:
         print(f'{domain}')
-        print(f'F1: {F:.3f}, P: {P:.3f}, R: {R:.3f}, {conf}')
-    return {'F1': F, 'Precision': P, 'Recall': R}
+        print(f'F1: {round(F, 3):.3f}, P: {P:.3f}, R: {R:.3f}, {conf}')
+        print("%.2f" % a)
+    return {'F1': round(F,3), 'Precision': round(P,3), 'Recall': round(R,3)}
 
 def post_eval(ds_dict, domain, thresh=-1, **kwargs):
     with open(f'{domain}.pkl', 'rb') as f:
