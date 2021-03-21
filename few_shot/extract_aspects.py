@@ -4,6 +4,18 @@ import spacy
 
 models_dict = {}
 
+spacy_model = spacy.load('en_core_web_sm')
+
+def get_fm_pipeline(model):
+    if model in models_dict:
+        fm_model = models_dict[model]
+    else:
+        print(f"\nLoading {model} fill-mask pipeline...\n")
+        stdout.flush()
+        fm_model = pipeline('fill-mask', model=model, framework="pt")
+        models_dict[model] = fm_model
+    return fm_model
+
 def extract_aspects_from_sentence(PATTERNS, text, tokens, model_name, pattern_names, top_k=10, thresh=-1, target=True, **kwargs):
     hparams = locals()
     for v in 'text', 'tokens', 'kwargs':
@@ -29,12 +41,12 @@ def extract_aspects_from_sentence(PATTERNS, text, tokens, model_name, pattern_na
     preds = [pred['token_str'].lstrip() for pred in mask_preds]
 
     # validate - make sure token exists in sentece
-    valid_preds, pred_bio = validate_pred_tokens(tokens, mask_preds, thresh = thresh)
+    valid_preds, pred_bio = validate_pred_tokens(text, tokens, mask_preds, thresh = thresh)
     
     return preds, valid_preds, pred_bio, mask_preds, hparams
 
 
-def validate_pred_tokens(tokens, mask_preds, thresh=-1):
+def validate_pred_tokens(text, tokens, mask_preds, thresh=-1):
     valid_preds, valid_idx = [], set()
 
     for pred in mask_preds:
@@ -42,9 +54,9 @@ def validate_pred_tokens(tokens, mask_preds, thresh=-1):
 
         if score > thresh:
             try:
-                idx = tokens.index(pred_token)
-                valid_idx.add(idx)
-                if (is_noun_token(tokens, idx)):
+                idx = tokens.index(pred_token)                
+                if (is_noun_token(text, pred_token)):
+                    valid_idx.add(idx)
                     valid_preds.append((pred_token, f"{score:.3f}"))
             except ValueError:
                 pass
@@ -53,10 +65,13 @@ def validate_pred_tokens(tokens, mask_preds, thresh=-1):
 
     return valid_preds, pred_bio
 
-def is_noun_token(tokens, idx):
+def is_noun_token(text, pred_token):
 
-
-    return True
+    nouns = [ent.text for ent in spacy_model(text) if ent.pos_ == 'NOUN']
+    if pred_token in nouns:
+        return True
+    else:
+        return False
 
 def merge_mask_preds(mask_preds_all, strategy='union'):
     
@@ -70,15 +85,6 @@ def merge_mask_preds(mask_preds_all, strategy='union'):
 
     return unified_preds
 
-def get_fm_pipeline(model):
-    if model in models_dict:
-        fm_model = models_dict[model]
-    else:
-        print(f"\nLoading {model} fill-mask pipeline...\n")
-        stdout.flush()
-        fm_model = pipeline('fill-mask', model=model, framework="pt")
-        models_dict[model] = fm_model
-    return fm_model
 
 def fill_mask_preds(fm_pipeline, text, tokens, pattern, top_k, target):
     delim = ' ' if text[-1] in ('.', '!', '?') else '. '
