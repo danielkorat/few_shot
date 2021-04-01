@@ -14,7 +14,6 @@ import numpy as np
 import seaborn as sns
 from extract_aspects import extract_aspects_from_sentence
 
-
 logging.disable(logging.WARNING)
 
 from tqdm import tqdm as tq
@@ -41,6 +40,16 @@ P9 = "So, it is all about the <mask>."
 P10 = "So, I am talking about the <mask>."
 
 PATTERNS = {'P1': P1, 'P2': P2, 'P3': P3, 'P4': P4, 'P5': P5, 'P6': P6, 'P7': P7, 'P8': P8, 'P9': P9, 'P10': P10}
+
+P_B1 = "So the <aspect> was <mask>."
+P_B2 = "In summary, the <aspect> was <mask>."
+P_B3 = "All in all, the <aspect> was <mask>."
+P_B4 = "<mask>, the aspect is <aspect>."
+P_B5 = "<mask>, the aspect in my review is <aspect>."
+P_B6 = "<mask>, the topic of my review is <aspect>."
+P_B7 = "Is it true that the aspect is <aspect>? <mask>."
+
+PATTERNS_B = {'P_B1': P_B1, 'P_B2': P_B2, 'P_B3': P_B3, 'P_B4': P_B4, 'P_B5': P_B5, 'P_B6': P_B6, 'P_B7': P_B7}
 
 def load_dataset(csv_url, json_url, multi_token=False):
     print(f"Loading dataset from '{csv_url}' and '{json_url}'...")
@@ -152,26 +161,28 @@ def post_eval(ds_dict, domain, thresh=-1, **kwargs):
         all_gold_bio.append(gold_bio)
     return {'metrics': metrics(all_gold_bio, all_preds_bio, domain)}
 
-def eval_ds(ds_dict, domain, model_name, pattern_names, exper_str, test_limit=None, **kwargs):
-    all_preds_bio, all_preds, all_valid_preds, all_mask_preds, all_gold_bio = [], [], [], [], []
+def eval_ds(ds_dict, domain, model_name, pattern_names, pattern_names_B, exper_str, test_limit=None, **kwargs):
+    all_preds_bio, all_preds, all_valid_preds, all_gold_bio = [], [], [], []
     for text, tokens, gold_bio, aspects in tqdm(ds_dict[domain]['test'][:test_limit]):
-        preds, valid_preds, pred_bio, mask_preds, hparams = extract_aspects_from_sentence(PATTERNS=PATTERNS, text=text, tokens=tokens, model_name=model_name, pattern_names=pattern_names,  **kwargs)                                                  
+        preds, pred_bio,  hparams = extract_aspects_from_sentence(PATTERNS=PATTERNS, PATTERNS_B=PATTERNS_B, 
+                                                        text=text, tokens=tokens, model_name=model_name,
+                                                        pattern_names=pattern_names, pattern_names_B=pattern_names_B, **kwargs)                                                  
         all_preds.append(preds)
-        all_valid_preds.append(valid_preds)
         all_preds_bio.append(pred_bio)
-        all_mask_preds.append(mask_preds)
         all_gold_bio.append(gold_bio)
 
     makedirs('predictions', exist_ok=True)
     with open(f'predictions/{domain}_{exper_str}.json', 'w') as f:
-        json.dump((all_preds, all_mask_preds), f)
+        json.dump((all_preds), f)
 
     return {'metrics': metrics(all_gold_bio, all_preds_bio, domain, **kwargs), 'hparams': hparams}
 
 def eval_domain(domain, **kwargs):
     all_preds_bio, all_preds, all_mask_preds, all_gold_bio = [], [], [], []
     for text, tokens, gold_bio, aspects in domain_ds[domain]:
-        preds, _, pred_bio, mask_preds, hparams = extract_aspects_from_sentence(PATTERNS=PATTERNS, text=text, tokens=tokens, **kwargs)
+        preds, _, pred_bio, mask_preds, hparams = extract_aspects_from_sentence(PATTERNS=PATTERNS, PATTERNS_B=PATTERNS_B, 
+                                                        text=text, tokens=tokens, model_name=model_name,
+                                                        pattern_names=pattern_names, pattern_names_B=pattern_names_B, **kwargs)
         all_preds.append(preds)
         all_preds_bio.append(pred_bio)
         all_mask_preds.append(mask_preds)
