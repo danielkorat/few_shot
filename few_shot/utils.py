@@ -275,41 +275,53 @@ def apply_pattern(P1):
         return delim.join([text, P1])
     return apply
 
+def apply_pattern_and_replace_mask(f, P, x, unique_count, count, replace_with):
+    unique_count += 1
+    for replacement in replace_with:
+        count += 1
+        line = P(x).replace('<mask>', replacement) + '\n'
+        f.write(line)
+    return unique_count, count
 
 def create_mlm_train_sets(ds_dict, labelled_amount, sample_selection, **kwargs):
     pattern_name = kwargs['pattern_names'][0]   
     P = apply_pattern(PATTERNS[pattern_name])
     makedirs('mlm_data', exist_ok=True)
     actual_labelled_amounts = {}
+
     for domain in 'rest', 'lap':
         count, unique_count = 0, 0
+        train_samples = ds_dict[domain]['train']
+        train_out_path = f'mlm_data/{domain}_train_{labelled_amount}_{pattern_name}.txt'
 
-        with open(f'mlm_data/{domain}_train_{labelled_amount}_{pattern_name}.txt', 'w') as f:
-            # Use only smaples with aspects
+        with open(train_out_path, 'w') as f:
+            # Use only samples with aspects
             if sample_selection == 'take_positives':
-                for x, *_, aspects in ds_dict[domain]['train'][:labelled_amount]:
+                for x, *_, aspects in train_samples[:labelled_amount]:
                     if aspects:
-                        unique_count += 1
-                        for aspect in aspects:
-                            count += 1
-                            line = P(x).replace('<mask>', aspect) + '\n'
-                            f.write(line)
+                        unique_count, count = \
+                            apply_pattern_and_replace_mask(f, P, x, unique_count, count, replace_with=aspects)
 
-            # Use only smaples with aspects, match required labelled amount
+            # Use only samples with aspects, match required labelled amount
             elif sample_selection == 'match_positives':
-                for x, *_, aspects in ds_dict[domain]['train']:
+                for x, *_, aspects in train_samples:
                     if aspects:
-                        unique_count += 1
-                        for aspect in aspects:
-                            count += 1
-                            line = P(x).replace('<mask>', aspect) + '\n'
-                            f.write(line)
+                        unique_count, count = \
+                            apply_pattern_and_replace_mask(f, P, x, unique_count, count, replace_with=aspects)
                     if unique_count == labelled_amount:
                         break
-                if unique_count != labelled_amount:
-                    print('uniq', unique_count)
-                    print('labelled', labelled_amount)
-                    assert False
+                assert unique_count == labelled_amount
+
+            # Insert 'NONE' as an aspect when there are no aspects
+            elif sample_selection == 'negatives_with_none':
+                for x, *_, aspects in train_samples:
+                    if aspects:
+                        unique_count, count = \
+                            apply_pattern_and_replace_mask(f, P, x, unique_count, count, aspects, replace_with=aspects)
+                    else:
+                        unique_count, count = \
+                            apply_pattern_and_replace_mask(f, P, x, unique_count, count, replace_with=['NONE'])
+
         actual_labelled_amounts[domain] = (unique_count, count)
     return actual_labelled_amounts
 

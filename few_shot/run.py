@@ -77,8 +77,8 @@ def main():
     # sample_selection = 'take_positives' / 'match_positives' / 'negatives_with_none'
     # few_shot_experiment(pattern_name='P5', labelled_amounts=range(20, 101, 20), sample_selection='take_positives')
 
-    few_shot_experiment(pattern_names=('P5',), labelled_amounts=range(20, 51), sample_selection='take_positives',
-        model_name='roberta-base', max_steps=5, test_limit=5)
+    few_shot_experiment(pattern_names=('P5',), labelled_amounts=range(10, 51, 10), sample_selection='match_positives',
+        model_name='roberta-base') #, max_steps=5, test_limit=5)
 
 
 if __name__ == "__main__":
