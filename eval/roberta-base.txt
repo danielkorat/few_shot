@@ -1,15 +1,15 @@
 Test Domain: rest
 Metric	Score
-P	69.45
-R	50.03
-F1	58.16
+P	100.00
+R	100.00
+F1	100.00
 ________________
 
 Test Domain: lap
 Metric	Score
-P	36.89
-R	48.17
-F1	41.78
+P	100.00
+R	50.00
+F1	66.70
 ________________
 
-{'target': True, 'thresh': -1, 'top_k': 5, 'pattern_name': 'P5', 'model_name': 'roberta-base', 'sample_selection': 'conservative'}
+{'target': True, 'thresh': -1, 'top_k': 10, 'model_name': 'roberta-base', 'pattern_names': ('P5',), 'sample_selection': 'take_positives', 'max_steps': 5}

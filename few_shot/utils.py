@@ -12,7 +12,7 @@ import plotly.express as px
 from matplotlib import pyplot as plt
 import numpy as np
 import seaborn as sns
-from extract_aspects import extract_aspects_from_sentence
+from extract_aspects import extract_aspects_from_sentence, get_fm_pipeline
 
 logging.disable(logging.WARNING)
 
@@ -51,6 +51,7 @@ P_B7 = "Is it true that the aspect is <aspect>? <mask>."
 
 PATTERNS_B = {'P_B1': P_B1, 'P_B2': P_B2, 'P_B3': P_B3, 'P_B4': P_B4, 'P_B5': P_B5, 'P_B6': P_B6, 'P_B7': P_B7}
 
+
 def load_dataset(csv_url, json_url, multi_token=False):
     print(f"Loading dataset from '{csv_url}' and '{json_url}'...")
     json_rows = requests.get(JSON_DATA_DIR + json_url).text.splitlines()
@@ -82,7 +83,8 @@ def load_dataset(csv_url, json_url, multi_token=False):
         ds.append((text, tokens, labels, aspects))
     return ds
 
-def load_all_datasets(verbose=False, train_size=100):
+
+def load_all_datasets(verbose=False, train_size=200):
     makedirs('data', exist_ok=True)
     if not os.path.exists(f"data/lap_train_{train_size}.json"):   
         for domain_name, domain in zip(DOMAIN_NAMES, ('restaurants', 'laptops')):
@@ -97,9 +99,9 @@ def load_all_datasets(verbose=False, train_size=100):
 
             print("Writing datest to json...")
             with open(f"data/{domain_name}_train_{train_size}.json", 'w') as train_f:
-                json.dump(train, train_f)
+                json.dump(train, train_f, indent=2)
             with open(f"data/{domain_name}_test_{train_size}.json", 'w') as test_f:
-                json.dump(test, test_f)
+                json.dump(test, test_f, indent=2)
     else:
         print("Loading dataset from json...")
     return {domain_name: {split: json.load(open(f"data/{domain_name}_{split}_{train_size}.json")) for split in ('train', 'test')} \
@@ -114,14 +116,16 @@ def run_ds_examples(ds, model_name, pattern_name, **kwargs):
         print(tokens)
         print(f'gold: {aspects}\ngold_bio: {gold_bio}\nvalid_preds: {valid_preds}\npreds: {preds}\npred_bio: {pred_bio}\n')
     
+
 def metrics(gold, preds, domain, verbose=False, **kwargs):
     F, P, R, conf = (f(gold, preds) for f in (f1_score, precision_score,\
                      recall_score, performance_measure))
     if verbose:
         print(f'{domain}')
         print(f'F1: {round(F, 3):.3f}, P: {P:.3f}, R: {R:.3f}, {conf}')
-        print("%.2f" % a)
+
     return {'Precision': round(P,3), 'Recall': round(R,3), 'F1': round(F,3)}
+
 
 def post_eval(ds_dict, domain, thresh=-1, **kwargs):
     with open(f'{domain}.pkl', 'rb') as f:
@@ -161,60 +165,89 @@ def post_eval(ds_dict, domain, thresh=-1, **kwargs):
         all_gold_bio.append(gold_bio)
     return {'metrics': metrics(all_gold_bio, all_preds_bio, domain)}
 
-def eval_ds(ds_dict, domain, model_name, pattern_names, pattern_names_B, exper_str, test_limit=None, **kwargs):
+
+def run_example(text, tokens, top_k=10, thresh=-1, target=True, **kwargs):
+    hparams = locals()
+    for v in 'text', 'tokens', 'kwargs':
+        hparams.pop(v)
+    hparams.update(kwargs)
+
+    delim = ' ' if text[-1] in ('.', '!', '?') else '. '
+    pattern = PATTERNS[kwargs['pattern_names'][0]]
+    fm_pipeline = get_fm_pipeline(kwargs['model_name'])
+    pattern = pattern.replace('<mask>', f"{fm_pipeline.tokenizer.mask_token}")
+    preds_meta = fm_pipeline(delim.join([text, pattern]), top_k=top_k,
+                         target=tokens if target else None)
+    preds, valid_preds, valid_idx = [], [], set()
+
+    for pred in preds_meta:
+        pred_token, score = pred['token_str'].lstrip(), pred['score']
+        preds.append(pred_token)
+
+        if score > thresh:
+            try:
+                idx = tokens.index(pred_token)
+                valid_idx.add(idx)
+                valid_preds.append((pred_token, f"{score:.3f}"))
+            except ValueError:
+                pass
+
+    pred_bio = ['B-ASP' if i in valid_idx else 'O' for i in range(len(tokens))]
+    return preds, valid_preds, pred_bio, preds_meta, hparams
+
+
+def eval_ds_run_example(ds_dict, domain, model_name, pattern_names, exper_str, test_limit=None, **kwargs):
+    all_preds_bio, all_preds, all_valid_preds, all_mask_preds, all_gold_bio = [], [], [], [], []
+    for text, tokens, gold_bio, aspects in tqdm(ds_dict[domain]['test'][:test_limit]):
+        preds, valid_preds, pred_bio, mask_preds, hparams = \
+            run_example(text=text, tokens=tokens, model_name=model_name, pattern_names=pattern_names,  **kwargs)                                                  
+        all_preds.append(preds)
+        all_valid_preds.append(valid_preds)
+        all_preds_bio.append(pred_bio)
+        all_mask_preds.append(mask_preds)
+        all_gold_bio.append(gold_bio)
+
+    makedirs('predictions', exist_ok=True)
+    with open(f'predictions/{domain}_{exper_str}.json', 'w') as f:
+        json.dump((all_preds, all_mask_preds), f, indent=2)
+
+    return {'metrics': metrics(all_gold_bio, all_preds_bio, domain, **kwargs), 'hparams': hparams}
+
+
+def eval_ds(ds_dict, domain, pattern_names, pattern_names_B, exper_str, test_limit=None, **kwargs):
     all_preds_bio, all_preds, all_valid_preds, all_gold_bio = [], [], [], []
     for text, tokens, gold_bio, aspects in tqdm(ds_dict[domain]['test'][:test_limit]):
-        preds, pred_bio,  hparams = extract_aspects_from_sentence(PATTERNS=PATTERNS, PATTERNS_B=PATTERNS_B, 
-                                                        text=text, tokens=tokens, model_name=model_name,
+        preds, pred_bio, hparams = extract_aspects_from_sentence(PATTERNS=PATTERNS, PATTERNS_B=PATTERNS_B, 
+                                                        text=text, tokens=tokens, model_name=kwargs['model_name'],
                                                         pattern_names=pattern_names, pattern_names_B=pattern_names_B, **kwargs)                                                  
         all_preds.append(preds)
         all_preds_bio.append(pred_bio)
         all_gold_bio.append(gold_bio)
 
-    makedirs('predictions', exist_ok=True)
-    with open(f'predictions/{domain}_{exper_str}.json', 'w') as f:
-        json.dump((all_preds), f)
-
-    return {'metrics': metrics(all_gold_bio, all_preds_bio, domain, **kwargs), 'hparams': hparams}
-
-def eval_domain(domain, **kwargs):
-    all_preds_bio, all_preds, all_mask_preds, all_gold_bio = [], [], [], []
-    for text, tokens, gold_bio, aspects in domain_ds[domain]:
-        preds, _, pred_bio, mask_preds, hparams = extract_aspects_from_sentence(PATTERNS=PATTERNS, PATTERNS_B=PATTERNS_B, 
-                                                        text=text, tokens=tokens, model_name=model_name,
-                                                        pattern_names=pattern_names, pattern_names_B=pattern_names_B, **kwargs)
-        all_preds.append(preds)
-        all_preds_bio.append(pred_bio)
-        all_mask_preds.append(mask_preds)
-        all_gold_bio.append(gold_bio)
-
     # write predictions to file
     makedirs('predictions', exist_ok=True)
-    with open(f'predictions/{domain}.pkl', 'wb') as f:
-        pickle.dump((all_preds, all_mask_preds), f)
+    with open(f'predictions/{domain}_{exper_str}.json', 'w') as f:
+        json.dump((all_preds), f, indent=2)
 
     return {'metrics': metrics(all_gold_bio, all_preds_bio, domain, **kwargs), 'hparams': hparams}
 
-def eval_all(**kwargs):    
-    eval_res, post_res = {}, {}
-    hparams = None
-    for domain in tqdm(('rest', 'lap')):
-        for res, func in tqdm(zip((eval_res, post_res), (eval_domain, post_process))):
-            func_res = func(domain, **kwargs)
-            hparams = func_res.get('hparams', hparams)
-            res[domain] = {'hparams': hparams, 'metrics': func_res['metrics']}
-    return {'eval_res': eval_res, 'post_res': post_res, 'hparams': hparams}
+    # makedirs('predictions', exist_ok=True)
+    # with open(f'predictions/{domain}.pkl', 'wb') as f:
+    #     pickle.dump((all_preds, all_mask_preds), f)
 
-def evaluate(lm, exper_name='', post=False, **kwargs):
+    # return {'metrics': metrics(all_gold_bio, all_preds_bio, domain, **kwargs), 'hparams': hparams}
+
+
+def evaluate(exper_name='', post=False, **kwargs):
     if exper_name:
         exper_name = '_' + exper_name
-    ds_dict = load_all_datasets(train_size=100)
+    ds_dict = load_all_datasets()
     all_res = {}
-    exper_str = f"{lm.replace('models/', '')}{exper_name}"
+    exper_str = f"{kwargs['model_name'].replace('models/', '')}{exper_name}"
     makedirs('eval', exist_ok=True)
     with open(f"eval/{exper_str}.txt", 'w') as eval_f:
         for i, domain in enumerate(['rest', 'lap']):
-            res = eval_ds(ds_dict, domain, exper_str, model_name=lm, **kwargs)
+            res = eval_ds_run_example(ds_dict=ds_dict, domain=domain, exper_str=exper_str, **kwargs)
             all_res[domain] = res
             p, r, f1 = [f"{100. * res['metrics'][m]:.2f}" for m in ('Precision', 'Recall', 'F1')]
 
@@ -231,23 +264,10 @@ def evaluate(lm, exper_name='', post=False, **kwargs):
 
             if post:
                 # reads output files generated by eval_ds()
-                post_metrics = post_eval(ds_dict, domain, model=lm, **kwargs)
+                post_metrics = post_eval(ds_dict, domain, **kwargs)
                 print(f"Post-Evaluation results on '{domain}' train data:\n{post_metrics}\n")
     return all_res
 
-def test_hparam(hparam, values, **kwargs):
-    kwargs_dict = dict(kwargs)
-    eval_res, post_res = [], []
-    for v in tqdm(values):
-        kwargs_dict[hparam] = v
-        res = eval_all(**kwargs_dict)
-        eval_res.append(res['eval_res'])
-        post_res.append(res['post_res'])
-    test_res = eval_res, post_res, hparam, values
-    plot_all(*test_res)
-    final_hparams = res['hparams']
-    final_hparams.pop(hparam)
-    print(final_hparams)
 
 def apply_pattern(P1):
     def apply(text):
@@ -255,16 +275,19 @@ def apply_pattern(P1):
         return delim.join([text, P1])
     return apply
 
-def create_mlm_train_sets(ds_dict, size, sample_selection, pattern_name, **kwargs):           
+
+def create_mlm_train_sets(ds_dict, labelled_amount, sample_selection, **kwargs):
+    pattern_name = kwargs['pattern_names'][0]   
     P = apply_pattern(PATTERNS[pattern_name])
     makedirs('mlm_data', exist_ok=True)
-    actual_sizes = {}
+    actual_labelled_amounts = {}
     for domain in 'rest', 'lap':
         count, unique_count = 0, 0
 
-        with open(f'mlm_data/{domain}_train_{size}_{pattern_name}.txt', 'w') as f:
-            if sample_selection == 'conservative':
-                for x, *_, aspects in ds_dict[domain]['train'][:size]:
+        with open(f'mlm_data/{domain}_train_{labelled_amount}_{pattern_name}.txt', 'w') as f:
+            # Use only smaples with aspects
+            if sample_selection == 'take_positives':
+                for x, *_, aspects in ds_dict[domain]['train'][:labelled_amount]:
                     if aspects:
                         unique_count += 1
                         for aspect in aspects:
@@ -272,7 +295,8 @@ def create_mlm_train_sets(ds_dict, size, sample_selection, pattern_name, **kwarg
                             line = P(x).replace('<mask>', aspect) + '\n'
                             f.write(line)
 
-            elif sample_selection == 'exact_positives':
+            # Use only smaples with aspects, match required labelled amount
+            elif sample_selection == 'match_positives':
                 for x, *_, aspects in ds_dict[domain]['train']:
                     if aspects:
                         unique_count += 1
@@ -280,13 +304,15 @@ def create_mlm_train_sets(ds_dict, size, sample_selection, pattern_name, **kwarg
                             count += 1
                             line = P(x).replace('<mask>', aspect) + '\n'
                             f.write(line)
-                    if unique_count == size:
+                    if unique_count == labelled_amount:
                         break
-                if unique_count != size:
-                    print(unique_count)
+                if unique_count != labelled_amount:
+                    print('uniq', unique_count)
+                    print('labelled', labelled_amount)
                     assert False
-        actual_sizes[domain] = (unique_count, count)
-    return actual_sizes
+        actual_labelled_amounts[domain] = (unique_count, count)
+    return actual_labelled_amounts
+
 
 def plot_per_domain(res_dicts, hparam, values, title):
     fig, axs = plt.subplots(1, 2, figsize=(20, 6), sharey=True)
@@ -298,6 +324,7 @@ def plot_per_domain(res_dicts, hparam, values, title):
         axs[i].set_yticks(np.linspace(.1, .9, num=33))
         axs[i].yaxis.set_tick_params(labelbottom=True)
         sns.lineplot(data=df, ax=axs[i]).set_title(DOMAIN_NAMES[domain])
+
 
 def plot_few_shot(train_domain, plot_data, train_hparams, actual_num_labelled=None):
     data = []
@@ -338,30 +365,3 @@ def plot_few_shot(train_domain, plot_data, train_hparams, actual_num_labelled=No
                 .update_traces(mode="markers+lines", hovertemplate="%{customdata[1]}=%{y:.3f}<extra></extra>")\
                 .update_xaxes(showgrid=False, showspikes=True)\
                 .show()
-
-def plot_all(*res_dict_list, hparam, values):
-    data = []
-    for res_dicts in res_dict_list:
-        for domain in enumerate(['rest', 'lap']):
-            for res_dict, value in zip(res_dicts, values):
-                for metric, score in res_dict[domain]['metrics'].items():
-                    data.append({
-                        hparam: value,
-                        'domain': DOMAIN_NAMES[domain],
-                        'Metric': metric,
-                        'score': score,
-                        'Lemmatized': res_dicts == post_res})
-                    
-    px.line(data, x=hparam, y='score', facet_col='domain', 
-        line_dash='Lemmatized', color='Metric', line_shape='spline', hover_data={
-            'Lemmatized': False,
-            hparam: False,
-            'domain': False,
-            'Metric': True,
-            'score': ":.3f"}).update_layout(title_text=f"Effect of '{hparam}' Value", title_x=0.5, hoverlabel=dict(
-                font_size=12,
-                font_family="Rockwell"),
-                font=dict(family="Courier New, monospace", size=18))\
-        .update_traces(mode="markers+lines", hovertemplate="%{customdata[2]}=%{y:.3f}<extra></extra>")\
-        .update_xaxes(showgrid=False, showspikes=True)\
-        .show("notebook")

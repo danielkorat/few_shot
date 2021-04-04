@@ -1,1 +1,376 @@
-[[["money", "food", "wait", "receipts", "logistics", "paperwork", "driver", "patient", "process", "check"], ["game", "gameplay", "graphics", "story", "games", "art", "multiplayer", "visuals", "performance", "artwork"], ["food", "service", "restaurant", "menu", "experience", "hotel", "meal", "wine", "accommodations", "desserts"], ["food", "menu", "burgers", "restaurant", "burger", "dishes", "service", "meat", "pizza", "steak"], ["food", "latter", "service", "former", "restaurant", "menu", "meat", "burger", "burgers", "good"]], [[{"sequence": "Had we been stalling I could understand where they were coming from, but we had been there less than an hour and they hadn't even brought us a check yet! So, my review focuses on the money.", "score": 0.01840920001268387, "token": 418, "token_str": " money"}, {"sequence": "Had we been stalling I could understand where they were coming from, but we had been there less than an hour and they hadn't even brought us a check yet! So, my review focuses on the food.", "score": 0.01669333130121231, "token": 689, "token_str": " food"}, {"sequence": "Had we been stalling I could understand where they were coming from, but we had been there less than an hour and they hadn't even brought us a check yet! So, my review focuses on the wait.", "score": 0.013461550697684288, "token": 2067, "token_str": " wait"}, {"sequence": "Had we been stalling I could understand where they were coming from, but we had been there less than an hour and they hadn't even brought us a check yet! So, my review focuses on the receipts.", "score": 0.013328122906386852, "token": 20032, "token_str": " receipts"}, {"sequence": "Had we been stalling I could understand where they were coming from, but we had been there less than an hour and they hadn't even brought us a check yet! So, my review focuses on the logistics.", "score": 0.011000354774296284, "token": 10575, "token_str": " logistics"}, {"sequence": "Had we been stalling I could understand where they were coming from, but we had been there less than an hour and they hadn't even brought us a check yet! So, my review focuses on the paperwork.", "score": 0.009055576287209988, "token": 14630, "token_str": " paperwork"}, {"sequence": "Had we been stalling I could understand where they were coming from, but we had been there less than an hour and they hadn't even brought us a check yet! So, my review focuses on the driver.", "score": 0.008967804722487926, "token": 1393, "token_str": " driver"}, {"sequence": "Had we been stalling I could understand where they were coming from, but we had been there less than an hour and they hadn't even brought us a check yet! So, my review focuses on the patient.", "score": 0.008254101499915123, "token": 3186, "token_str": " patient"}, {"sequence": "Had we been stalling I could understand where they were coming from, but we had been there less than an hour and they hadn't even brought us a check yet! So, my review focuses on the process.", "score": 0.008178231306374073, "token": 609, "token_str": " process"}, {"sequence": "Had we been stalling I could understand where they were coming from, but we had been there less than an hour and they hadn't even brought us a check yet! So, my review focuses on the check.", "score": 0.0069686174392700195, "token": 1649, "token_str": " check"}], [{"sequence": "but overall i give it a 10. So, my review focuses on the game.", "score": 0.1468004286289215, "token": 177, "token_str": " game"}, {"sequence": "but overall i give it a 10. So, my review focuses on the gameplay.", "score": 0.0681249350309372, "token": 23841, "token_str": " gameplay"}, {"sequence": "but overall i give it a 10. So, my review focuses on the graphics.", "score": 0.040874239057302475, "token": 12774, "token_str": " graphics"}, {"sequence": "but overall i give it a 10. So, my review focuses on the story.", "score": 0.023950735107064247, "token": 527, "token_str": " story"}, {"sequence": "but overall i give it a 10. So, my review focuses on the games.", "score": 0.020069841295480728, "token": 426, "token_str": " games"}, {"sequence": "but overall i give it a 10. So, my review focuses on the art.", "score": 0.01625330001115799, "token": 1808, "token_str": " art"}, {"sequence": "but overall i give it a 10. So, my review focuses on the multiplayer.", "score": 0.013831394724547863, "token": 30295, "token_str": " multiplayer"}, {"sequence": "but overall i give it a 10. So, my review focuses on the visuals.", "score": 0.013194686733186245, "token": 27010, "token_str": " visuals"}, {"sequence": "but overall i give it a 10. So, my review focuses on the performance.", "score": 0.010311451740562916, "token": 819, "token_str": " performance"}, {"sequence": "but overall i give it a 10. So, my review focuses on the artwork.", "score": 0.00961178820580244, "token": 14129, "token_str": " artwork"}], [{"sequence": "I have tried to make reservations, but both times, the hostess didn't have my name. So, my review focuses on the food.", "score": 0.42047545313835144, "token": 689, "token_str": " food"}, {"sequence": "I have tried to make reservations, but both times, the hostess didn't have my name. So, my review focuses on the service.", "score": 0.039369869977235794, "token": 544, "token_str": " service"}, {"sequence": "I have tried to make reservations, but both times, the hostess didn't have my name. So, my review focuses on the restaurant.", "score": 0.024334080517292023, "token": 2391, "token_str": " restaurant"}, {"sequence": "I have tried to make reservations, but both times, the hostess didn't have my name. So, my review focuses on the menu.", "score": 0.02095669135451317, "token": 5765, "token_str": " menu"}, {"sequence": "I have tried to make reservations, but both times, the hostess didn't have my name. So, my review focuses on the experience.", "score": 0.015416772104799747, "token": 676, "token_str": " experience"}, {"sequence": "I have tried to make reservations, but both times, the hostess didn't have my name. So, my review focuses on the hotel.", "score": 0.013232934288680553, "token": 2303, "token_str": " hotel"}, {"sequence": "I have tried to make reservations, but both times, the hostess didn't have my name. So, my review focuses on the meal.", "score": 0.012882324866950512, "token": 5820, "token_str": " meal"}, {"sequence": "I have tried to make reservations, but both times, the hostess didn't have my name. So, my review focuses on the wine.", "score": 0.011251304298639297, "token": 3984, "token_str": " wine"}, {"sequence": "I have tried to make reservations, but both times, the hostess didn't have my name. So, my review focuses on the accommodations.", "score": 0.010191108100116253, "token": 24784, "token_str": " accommodations"}, {"sequence": "I have tried to make reservations, but both times, the hostess didn't have my name. So, my review focuses on the desserts.", "score": 0.007859643548727036, "token": 27519, "token_str": " desserts"}], [{"sequence": "This was one of the BEST restaurants I've ever been to. So, my review focuses on the food.", "score": 0.7343382239341736, "token": 689, "token_str": " food"}, {"sequence": "This was one of the BEST restaurants I've ever been to. So, my review focuses on the menu.", "score": 0.010823749005794525, "token": 5765, "token_str": " menu"}, {"sequence": "This was one of the BEST restaurants I've ever been to. So, my review focuses on the burgers.", "score": 0.008933976292610168, "token": 22551, "token_str": " burgers"}, {"sequence": "This was one of the BEST restaurants I've ever been to. So, my review focuses on the restaurant.", "score": 0.008359025232493877, "token": 2391, "token_str": " restaurant"}, {"sequence": "This was one of the BEST restaurants I've ever been to. So, my review focuses on the burger.", "score": 0.007713661063462496, "token": 18079, "token_str": " burger"}, {"sequence": "This was one of the BEST restaurants I've ever been to. So, my review focuses on the dishes.", "score": 0.00734289875254035, "token": 10230, "token_str": " dishes"}, {"sequence": "This was one of the BEST restaurants I've ever been to. So, my review focuses on the service.", "score": 0.007028365973383188, "token": 544, "token_str": " service"}, {"sequence": "This was one of the BEST restaurants I've ever been to. So, my review focuses on the meat.", "score": 0.006160702556371689, "token": 4884, "token_str": " meat"}, {"sequence": "This was one of the BEST restaurants I've ever been to. So, my review focuses on the pizza.", "score": 0.005551470909267664, "token": 9366, "token_str": " pizza"}, {"sequence": "This was one of the BEST restaurants I've ever been to. So, my review focuses on the steak.", "score": 0.005063752178102732, "token": 19464, "token_str": " steak"}], [{"sequence": "This restaurant used to be pretty decent. So, my review focuses on the food.", "score": 0.46671581268310547, "token": 689, "token_str": " food"}, {"sequence": "This restaurant used to be pretty decent. So, my review focuses on the latter.", "score": 0.054269496351480484, "token": 5442, "token_str": " latter"}, {"sequence": "This restaurant used to be pretty decent. So, my review focuses on the service.", "score": 0.028919009491801262, "token": 544, "token_str": " service"}, {"sequence": "This restaurant used to be pretty decent. So, my review focuses on the former.", "score": 0.02504073455929756, "token": 320, "token_str": " former"}, {"sequence": "This restaurant used to be pretty decent. So, my review focuses on the restaurant.", "score": 0.013876418583095074, "token": 2391, "token_str": " restaurant"}, {"sequence": "This restaurant used to be pretty decent. So, my review focuses on the menu.", "score": 0.012050787918269634, "token": 5765, "token_str": " menu"}, {"sequence": "This restaurant used to be pretty decent. So, my review focuses on the meat.", "score": 0.011533163487911224, "token": 4884, "token_str": " meat"}, {"sequence": "This restaurant used to be pretty decent. So, my review focuses on the burger.", "score": 0.00932124350219965, "token": 18079, "token_str": " burger"}, {"sequence": "This restaurant used to be pretty decent. So, my review focuses on the burgers.", "score": 0.009293602779507637, "token": 22551, "token_str": " burgers"}, {"sequence": "This restaurant used to be pretty decent. So, my review focuses on the good.", "score": 0.008099626749753952, "token": 205, "token_str": " good"}]]]
+[
+  [
+    [
+      "game",
+      "gameplay",
+      "food",
+      "design",
+      "music",
+      "graphics",
+      "video",
+      "performance",
+      "visuals",
+      "book"
+    ],
+    [
+      "food",
+      "menu",
+      "meat",
+      "taste",
+      "service",
+      "dishes",
+      "restaurant",
+      "price",
+      "pizza",
+      "burgers"
+    ],
+    [
+      "service",
+      "performance",
+      "experience",
+      "services",
+      "interface",
+      "bad",
+      "quality",
+      "phone",
+      "latter",
+      "software"
+    ],
+    [
+      "latter",
+      "following",
+      "performance",
+      "above",
+      "game",
+      "results",
+      "former",
+      "design",
+      "film",
+      "movie"
+    ],
+    [
+      "basics",
+      "latter",
+      "essentials",
+      "classics",
+      "clothes",
+      "food",
+      "shoes",
+      "good",
+      "goods",
+      "design"
+    ]
+  ],
+  [
+    [
+      {
+        "sequence": "Don't look down your nose at me like that... So, my review focuses on the game.",
+        "score": 0.04895913600921631,
+        "token": 177,
+        "token_str": " game"
+      },
+      {
+        "sequence": "Don't look down your nose at me like that... So, my review focuses on the gameplay.",
+        "score": 0.032820433378219604,
+        "token": 23841,
+        "token_str": " gameplay"
+      },
+      {
+        "sequence": "Don't look down your nose at me like that... So, my review focuses on the food.",
+        "score": 0.019071334972977638,
+        "token": 689,
+        "token_str": " food"
+      },
+      {
+        "sequence": "Don't look down your nose at me like that... So, my review focuses on the design.",
+        "score": 0.015092668123543262,
+        "token": 1521,
+        "token_str": " design"
+      },
+      {
+        "sequence": "Don't look down your nose at me like that... So, my review focuses on the music.",
+        "score": 0.014113657176494598,
+        "token": 930,
+        "token_str": " music"
+      },
+      {
+        "sequence": "Don't look down your nose at me like that... So, my review focuses on the graphics.",
+        "score": 0.01237949263304472,
+        "token": 12774,
+        "token_str": " graphics"
+      },
+      {
+        "sequence": "Don't look down your nose at me like that... So, my review focuses on the video.",
+        "score": 0.010236596688628197,
+        "token": 569,
+        "token_str": " video"
+      },
+      {
+        "sequence": "Don't look down your nose at me like that... So, my review focuses on the performance.",
+        "score": 0.010002508759498596,
+        "token": 819,
+        "token_str": " performance"
+      },
+      {
+        "sequence": "Don't look down your nose at me like that... So, my review focuses on the visuals.",
+        "score": 0.009423292241990566,
+        "token": 27010,
+        "token_str": " visuals"
+      },
+      {
+        "sequence": "Don't look down your nose at me like that... So, my review focuses on the book.",
+        "score": 0.009253411553800106,
+        "token": 1040,
+        "token_str": " book"
+      }
+    ],
+    [
+      {
+        "sequence": "Planet Thai is great! So, my review focuses on the food.",
+        "score": 0.7161498069763184,
+        "token": 689,
+        "token_str": " food"
+      },
+      {
+        "sequence": "Planet Thai is great! So, my review focuses on the menu.",
+        "score": 0.022324461489915848,
+        "token": 5765,
+        "token_str": " menu"
+      },
+      {
+        "sequence": "Planet Thai is great! So, my review focuses on the meat.",
+        "score": 0.01673400029540062,
+        "token": 4884,
+        "token_str": " meat"
+      },
+      {
+        "sequence": "Planet Thai is great! So, my review focuses on the taste.",
+        "score": 0.007719845045357943,
+        "token": 5840,
+        "token_str": " taste"
+      },
+      {
+        "sequence": "Planet Thai is great! So, my review focuses on the service.",
+        "score": 0.006799608003348112,
+        "token": 544,
+        "token_str": " service"
+      },
+      {
+        "sequence": "Planet Thai is great! So, my review focuses on the dishes.",
+        "score": 0.006626682821661234,
+        "token": 10230,
+        "token_str": " dishes"
+      },
+      {
+        "sequence": "Planet Thai is great! So, my review focuses on the restaurant.",
+        "score": 0.00534051051363349,
+        "token": 2391,
+        "token_str": " restaurant"
+      },
+      {
+        "sequence": "Planet Thai is great! So, my review focuses on the price.",
+        "score": 0.005147137213498354,
+        "token": 425,
+        "token_str": " price"
+      },
+      {
+        "sequence": "Planet Thai is great! So, my review focuses on the pizza.",
+        "score": 0.0051441979594528675,
+        "token": 9366,
+        "token_str": " pizza"
+      },
+      {
+        "sequence": "Planet Thai is great! So, my review focuses on the burgers.",
+        "score": 0.0049467491917312145,
+        "token": 22551,
+        "token_str": " burgers"
+      }
+    ],
+    [
+      {
+        "sequence": "The service is awful. So, my review focuses on the service.",
+        "score": 0.5429664254188538,
+        "token": 544,
+        "token_str": " service"
+      },
+      {
+        "sequence": "The service is awful. So, my review focuses on the performance.",
+        "score": 0.017670888453722,
+        "token": 819,
+        "token_str": " performance"
+      },
+      {
+        "sequence": "The service is awful. So, my review focuses on the experience.",
+        "score": 0.012152507901191711,
+        "token": 676,
+        "token_str": " experience"
+      },
+      {
+        "sequence": "The service is awful. So, my review focuses on the services.",
+        "score": 0.010725635103881359,
+        "token": 518,
+        "token_str": " services"
+      },
+      {
+        "sequence": "The service is awful. So, my review focuses on the interface.",
+        "score": 0.010420715436339378,
+        "token": 12332,
+        "token_str": " interface"
+      },
+      {
+        "sequence": "The service is awful. So, my review focuses on the bad.",
+        "score": 0.009886611253023148,
+        "token": 1099,
+        "token_str": " bad"
+      },
+      {
+        "sequence": "The service is awful. So, my review focuses on the quality.",
+        "score": 0.00883539766073227,
+        "token": 1318,
+        "token_str": " quality"
+      },
+      {
+        "sequence": "The service is awful. So, my review focuses on the phone.",
+        "score": 0.006667120382189751,
+        "token": 1028,
+        "token_str": " phone"
+      },
+      {
+        "sequence": "The service is awful. So, my review focuses on the latter.",
+        "score": 0.005692952778190374,
+        "token": 5442,
+        "token_str": " latter"
+      },
+      {
+        "sequence": "The service is awful. So, my review focuses on the software.",
+        "score": 0.005433372687548399,
+        "token": 2257,
+        "token_str": " software"
+      }
+    ],
+    [
+      {
+        "sequence": "Just don't do it. So, my review focuses on the latter.",
+        "score": 0.02188144065439701,
+        "token": 5442,
+        "token_str": " latter"
+      },
+      {
+        "sequence": "Just don't do it. So, my review focuses on the following.",
+        "score": 0.01549853291362524,
+        "token": 511,
+        "token_str": " following"
+      },
+      {
+        "sequence": "Just don't do it. So, my review focuses on the performance.",
+        "score": 0.010487222112715244,
+        "token": 819,
+        "token_str": " performance"
+      },
+      {
+        "sequence": "Just don't do it. So, my review focuses on the above.",
+        "score": 0.009327110834419727,
+        "token": 1065,
+        "token_str": " above"
+      },
+      {
+        "sequence": "Just don't do it. So, my review focuses on the game.",
+        "score": 0.008478859439492226,
+        "token": 177,
+        "token_str": " game"
+      },
+      {
+        "sequence": "Just don't do it. So, my review focuses on the results.",
+        "score": 0.008476555347442627,
+        "token": 775,
+        "token_str": " results"
+      },
+      {
+        "sequence": "Just don't do it. So, my review focuses on the former.",
+        "score": 0.006770710926502943,
+        "token": 320,
+        "token_str": " former"
+      },
+      {
+        "sequence": "Just don't do it. So, my review focuses on the design.",
+        "score": 0.0067286710254848,
+        "token": 1521,
+        "token_str": " design"
+      },
+      {
+        "sequence": "Just don't do it. So, my review focuses on the film.",
+        "score": 0.00603215117007494,
+        "token": 822,
+        "token_str": " film"
+      },
+      {
+        "sequence": "Just don't do it. So, my review focuses on the movie.",
+        "score": 0.0057234978303313255,
+        "token": 1569,
+        "token_str": " movie"
+      }
+    ],
+    [
+      {
+        "sequence": "Just ignore the trendy wannabes. So, my review focuses on the basics.",
+        "score": 0.043869197368621826,
+        "token": 17293,
+        "token_str": " basics"
+      },
+      {
+        "sequence": "Just ignore the trendy wannabes. So, my review focuses on the latter.",
+        "score": 0.028936902061104774,
+        "token": 5442,
+        "token_str": " latter"
+      },
+      {
+        "sequence": "Just ignore the trendy wannabes. So, my review focuses on the essentials.",
+        "score": 0.020321322605013847,
+        "token": 28146,
+        "token_str": " essentials"
+      },
+      {
+        "sequence": "Just ignore the trendy wannabes. So, my review focuses on the classics.",
+        "score": 0.020246557891368866,
+        "token": 20323,
+        "token_str": " classics"
+      },
+      {
+        "sequence": "Just ignore the trendy wannabes. So, my review focuses on the clothes.",
+        "score": 0.01408336590975523,
+        "token": 5418,
+        "token_str": " clothes"
+      },
+      {
+        "sequence": "Just ignore the trendy wannabes. So, my review focuses on the food.",
+        "score": 0.013444260694086552,
+        "token": 689,
+        "token_str": " food"
+      },
+      {
+        "sequence": "Just ignore the trendy wannabes. So, my review focuses on the shoes.",
+        "score": 0.01222070213407278,
+        "token": 5582,
+        "token_str": " shoes"
+      },
+      {
+        "sequence": "Just ignore the trendy wannabes. So, my review focuses on the good.",
+        "score": 0.011199599131941795,
+        "token": 205,
+        "token_str": " good"
+      },
+      {
+        "sequence": "Just ignore the trendy wannabes. So, my review focuses on the goods.",
+        "score": 0.011150192469358444,
+        "token": 3057,
+        "token_str": " goods"
+      },
+      {
+        "sequence": "Just ignore the trendy wannabes. So, my review focuses on the design.",
+        "score": 0.010127164423465729,
+        "token": 1521,
+        "token_str": " design"
+      }
+    ]
+  ]
+]
