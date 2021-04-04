@@ -275,11 +275,13 @@ def apply_pattern(P1):
         return delim.join([text, P1])
     return apply
 
-def apply_pattern_and_replace_mask(f, P, x, unique_count, count, replace_with):
+def replace_mask(f, P, x, unique_count, count, replace_with):
     unique_count += 1
+    P_x = P(x)
+    
     for replacement in replace_with:
         count += 1
-        line = P(x).replace('<mask>', replacement) + '\n'
+        line = P_x.replace('<mask>', replacement) + '\n'
         f.write(line)
     return unique_count, count
 
@@ -300,14 +302,14 @@ def create_mlm_train_sets(ds_dict, labelled_amount, sample_selection, **kwargs):
                 for x, *_, aspects in train_samples[:labelled_amount]:
                     if aspects:
                         unique_count, count = \
-                            apply_pattern_and_replace_mask(f, P, x, unique_count, count, replace_with=aspects)
+                            replace_mask(f, P, x, unique_count, count, replace_with=aspects)
 
             # Use only samples with aspects, match required labelled amount
             elif sample_selection == 'match_positives':
                 for x, *_, aspects in train_samples:
                     if aspects:
                         unique_count, count = \
-                            apply_pattern_and_replace_mask(f, P, x, unique_count, count, replace_with=aspects)
+                            replace_mask(f, P, x, unique_count, count, replace_with=aspects)
                     if unique_count == labelled_amount:
                         break
                 assert unique_count == labelled_amount
@@ -317,10 +319,10 @@ def create_mlm_train_sets(ds_dict, labelled_amount, sample_selection, **kwargs):
                 for x, *_, aspects in train_samples:
                     if aspects:
                         unique_count, count = \
-                            apply_pattern_and_replace_mask(f, P, x, unique_count, count, aspects, replace_with=aspects)
+                            replace_mask(f, P, x, unique_count, count, replace_with=aspects)
                     else:
                         unique_count, count = \
-                            apply_pattern_and_replace_mask(f, P, x, unique_count, count, replace_with=['NONE'])
+                            replace_mask(f, P, x, unique_count, count, replace_with=['NONE'])
 
         actual_labelled_amounts[domain] = (unique_count, count)
     return actual_labelled_amounts
