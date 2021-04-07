@@ -12,7 +12,10 @@ import plotly.express as px
 from matplotlib import pyplot as plt
 import numpy as np
 import seaborn as sns
-from extract_aspects import extract_aspects_from_sentence, get_fm_pipeline
+from extract_aspects import extract_aspects, get_fm_pipeline
+
+from patterns import PATTERNS, SCORING_PATTERNS
+
 
 logging.disable(logging.WARNING)
 
@@ -26,30 +29,6 @@ DOMAIN_TO_STR = {'rest': 'Restaurants', 'lap': 'Laptops'}
 DATA_DIR = 'https://raw.githubusercontent.com/IntelLabs/nlp-architect/libert/nlp_architect/models/libert/data/'
 CSV_DATA_DIR = DATA_DIR + 'csv/spacy/domains_all/'
 JSON_DATA_DIR = DATA_DIR + 'Dai2019/semeval14/'
-
-# Mask Patterns
-P1 = "So, the <mask> is the interesting aspect."
-P2 = "So, the interesting aspect is <mask>."
-P3 = "So, the <mask> are the interesting aspect."
-P4 = "So, this is my opinion on <mask>."
-P5 = "So, my review focuses on the <mask>."
-P6 = "So, the <mask> is wonderful."
-P7 = "So, the <mask> is awful."
-P8 = "So, the main topic is the <mask>."
-P9 = "So, it is all about the <mask>."
-P10 = "So, I am talking about the <mask>."
-
-PATTERNS = {'P1': P1, 'P2': P2, 'P3': P3, 'P4': P4, 'P5': P5, 'P6': P6, 'P7': P7, 'P8': P8, 'P9': P9, 'P10': P10}
-
-P_B1 = "So the <aspect> was <mask>."
-P_B2 = "In summary, the <aspect> was <mask>."
-P_B3 = "All in all, the <aspect> was <mask>."
-P_B4 = "<mask>, the aspect is <aspect>."
-P_B5 = "<mask>, the aspect in my review is <aspect>."
-P_B6 = "<mask>, the topic of my review is <aspect>."
-P_B7 = "Is it true that the aspect is <aspect>? <mask>."
-
-PATTERNS_B = {'P_B1': P_B1, 'P_B2': P_B2, 'P_B3': P_B3, 'P_B4': P_B4, 'P_B5': P_B5, 'P_B6': P_B6, 'P_B7': P_B7}
 
 
 def load_dataset(csv_url, json_url, multi_token=False):
@@ -111,7 +90,7 @@ def load_all_datasets(verbose=False, train_size=200):
 def run_ds_examples(ds, model_name, pattern_name, **kwargs):
     print(f"Pattern: {kwargs['pattern']}\n")
     for i, (text, tokens, gold_bio, aspects) in tqdm(enumerate(ds)):
-        preds, valid_preds, pred_bio, _, _ = extract_aspects_from_sentence(PATTERNS=PATTERNS, text=text, tokens=tokens, model_name=model_name, pattern_name=pattern_name, **kwargs)
+        preds, valid_preds, pred_bio, _, _ = extract_aspects(text=text, tokens=tokens, pattern_name=pattern_name, **kwargs)
         print(i, text)
         print(tokens)
         print(f'gold: {aspects}\ngold_bio: {gold_bio}\nvalid_preds: {valid_preds}\npreds: {preds}\npred_bio: {pred_bio}\n')
@@ -196,30 +175,31 @@ def run_example(text, tokens, top_k=10, thresh=-1, target=True, **kwargs):
     return preds, valid_preds, pred_bio, preds_meta, hparams
 
 
-def eval_ds_run_example(ds_dict, domain, model_name, pattern_names, exper_str, test_limit=None, **kwargs):
-    all_preds_bio, all_preds, all_valid_preds, all_mask_preds, all_gold_bio = [], [], [], [], []
+# def eval_ds_run_example(ds_dict, domain, model_name, pattern_names, exper_str, test_limit=None, **kwargs):
+#     all_preds_bio, all_preds, all_valid_preds, all_mask_preds, all_gold_bio = [], [], [], [], []
+#     for text, tokens, gold_bio, aspects in tqdm(ds_dict[domain]['test'][:test_limit]):
+#         preds, valid_preds, pred_bio, mask_preds, hparams = \
+#             run_example(text=text, tokens=tokens, model_name=model_name, pattern_names=pattern_names,  **kwargs)                                                  
+#         all_preds.append(preds)
+#         all_valid_preds.append(valid_preds)
+#         all_preds_bio.append(pred_bio)
+#         all_mask_preds.append(mask_preds)
+#         all_gold_bio.append(gold_bio)
+
+#     makedirs('predictions', exist_ok=True)
+#     with open(f'predictions/{domain}_{exper_str}.json', 'w') as f:
+#         json.dump((all_preds, all_mask_preds), f, indent=2)
+
+#     return {'metrics': metrics(all_gold_bio, all_preds_bio, domain, **kwargs), 'hparams': hparams}
+
+
+def eval_ds(ds_dict, domain, pattern_names, exper_str, scoring_patterns=None, test_limit=None, **kwargs):
+    all_preds_bio, all_preds, all_gold_bio = [], [], []
     for text, tokens, gold_bio, aspects in tqdm(ds_dict[domain]['test'][:test_limit]):
-        preds, valid_preds, pred_bio, mask_preds, hparams = \
-            run_example(text=text, tokens=tokens, model_name=model_name, pattern_names=pattern_names,  **kwargs)                                                  
-        all_preds.append(preds)
-        all_valid_preds.append(valid_preds)
-        all_preds_bio.append(pred_bio)
-        all_mask_preds.append(mask_preds)
-        all_gold_bio.append(gold_bio)
-
-    makedirs('predictions', exist_ok=True)
-    with open(f'predictions/{domain}_{exper_str}.json', 'w') as f:
-        json.dump((all_preds, all_mask_preds), f, indent=2)
-
-    return {'metrics': metrics(all_gold_bio, all_preds_bio, domain, **kwargs), 'hparams': hparams}
 
 
-def eval_ds(ds_dict, domain, pattern_names, pattern_names_B, exper_str, test_limit=None, **kwargs):
-    all_preds_bio, all_preds, all_valid_preds, all_gold_bio = [], [], [], []
-    for text, tokens, gold_bio, aspects in tqdm(ds_dict[domain]['test'][:test_limit]):
-        preds, pred_bio, hparams = extract_aspects_from_sentence(PATTERNS=PATTERNS, PATTERNS_B=PATTERNS_B, 
-                                                        text=text, tokens=tokens, model_name=kwargs['model_name'],
-                                                        pattern_names=pattern_names, pattern_names_B=pattern_names_B, **kwargs)                                                  
+        preds, pred_bio, hparams = \
+            extract_aspects(text=text, tokens=tokens, pattern_names=pattern_names, scoring_patterns=scoring_patterns, **kwargs)                                                  
         all_preds.append(preds)
         all_preds_bio.append(pred_bio)
         all_gold_bio.append(gold_bio)
@@ -247,7 +227,7 @@ def evaluate(exper_name='', post=False, **kwargs):
     makedirs('eval', exist_ok=True)
     with open(f"eval/{exper_str}.txt", 'w') as eval_f:
         for i, domain in enumerate(['rest', 'lap']):
-            res = eval_ds_run_example(ds_dict=ds_dict, domain=domain, exper_str=exper_str, **kwargs)
+            res = eval_ds(ds_dict=ds_dict, domain=domain, exper_str=exper_str, **kwargs)
             all_res[domain] = res
             p, r, f1 = [f"{100. * res['metrics'][m]:.2f}" for m in ('Precision', 'Recall', 'F1')]
 
@@ -316,13 +296,9 @@ def create_mlm_train_sets(ds_dict, labelled_amount, sample_selection, **kwargs):
 
             # Insert 'NONE' as an aspect when there are no aspects
             elif sample_selection == 'negatives_with_none':
-                for x, *_, aspects in train_samples:
-                    if aspects:
-                        unique_count, count = \
-                            replace_mask(f, P, x, unique_count, count, replace_with=aspects)
-                    else:
-                        unique_count, count = \
-                            replace_mask(f, P, x, unique_count, count, replace_with=['NONE'])
+                for x, *_, aspects in train_samples[:labelled_amount]:
+                    replace_mask(f, P, x, unique_count, count, \
+                        replace_with=aspects if aspects else ['NONE'])
 
         actual_labelled_amounts[domain] = (unique_count, count)
     return actual_labelled_amounts
@@ -340,7 +316,7 @@ def plot_per_domain(res_dicts, hparam, values, title):
         sns.lineplot(data=df, ax=axs[i]).set_title(DOMAIN_NAMES[domain])
 
 
-def plot_few_shot(train_domain, plot_data, train_hparams, actual_num_labelled=None):
+def plot_few_shot(train_domain, plot_data, train_hparams, actual_num_labelled=None, **kwargs):
     data = []
 
     # Format Hyperparameters
@@ -351,7 +327,7 @@ def plot_few_shot(train_domain, plot_data, train_hparams, actual_num_labelled=No
     if actual_num_labelled:
         hparams += ', actual_num_labelled: ' + str(actual_num_labelled)
 
-    for test_domain in 'lap', 'rest':
+    for test_domain in kwargs['test_domains']:
         for num_labelled, res_dict in plot_data.items():
             for metric, score in res_dict[test_domain]['metrics'].items():
                 data.append({

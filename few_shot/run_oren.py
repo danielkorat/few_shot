@@ -1,4 +1,4 @@
-from utils import load_all_datasets, evaluate, create_mlm_train_sets, plot_few_shot, PATTERNS, PATTERNS_B, eval_ds
+from utils import load_all_datasets, evaluate, create_mlm_train_sets, plot_few_shot, PATTERNS, SCORING_PATTERNS, eval_ds
 from run_pattern_mlm import main as run_pattern_mlm
 import os
 import pickle
@@ -71,9 +71,9 @@ def eval_pretrained():
     
     #pattern_groups=(['P1','P2'],['P1','P2','P3'],['P1','P2','P3','P4','P5'],['P1','P2','P3','P4','P5','P6'],['P1','P2','P3','P4','P5','P6','P7'],['P1','P2','P3','P4','P5','P6','P7','P8'])
     pattern_groups=(['P1'], ['P1', 'P2'],  ['P1', 'P2', 'P3'])
-    pattern_names_B=(['P_B1'])
+    scoring_patterns=(['P_B1'])
     for pattern_names in pattern_groups:
-        eval_results = eval_ds(data, domain='rest',model_name='roberta-base', pattern_names=pattern_names, pattern_names_B=pattern_names_B, exper_str='', **pattern_kwargs)
+        eval_results = eval_ds(data, domain='rest',model_name='roberta-base', pattern_names=pattern_names, scoring_patterns=scoring_patterns, exper_str='', **pattern_kwargs)
         print("Stats:", eval_results['metrics'], "   Patterns: ", pattern_names)
 
 def main():

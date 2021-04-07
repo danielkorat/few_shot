@@ -3,6 +3,8 @@ from sys import stdout
 import torch
 import spacy
 
+from patterns import PATTERNS, SCORING_PATTERNS
+
 models_dict = {}
 
 spacy_model = spacy.load('en_core_web_sm')
@@ -17,32 +19,33 @@ def get_fm_pipeline(model):
         models_dict[model] = fm_model
     return fm_model
 
-def extract_aspects_from_sentence(PATTERNS, PATTERNS_B, text, tokens, model_name, pattern_names, pattern_names_B,
+def extract_aspects(text, tokens, pattern_names, scoring_patterns=None,
                                     top_k=10, thresh=-1, target=True, **kwargs):
     
     hparams = locals()
     for v in 'text', 'tokens', 'kwargs':
         hparams.pop(v)
     hparams.update(kwargs)
-    fm_pipeline = get_fm_pipeline(model_name)
+    fm_pipeline = get_fm_pipeline(kwargs['model_name'])
 
-    preds, pred_bio = extract_candidate_aspects(fm_pipeline, PATTERNS, text, tokens, model_name, pattern_names,
+    preds, pred_bio = extract_candidate_aspects(fm_pipeline, text, tokens, pattern_names,
                                                 top_k, thresh, target_flag=True, **kwargs)
 
-    #--------- aspect scoring --------
-    
-    pattern = PATTERNS_B[pattern_names_B[0]]
-    for pred in preds:
-        target_terms=['good', 'great', 'amazing', 'bad', 'awful', 'horrible']
-        #mask_preds = fill_mask_preds(fm_pipeline, text, target_terms, pattern, top_k, target_flag=True, sapect_token=pred)
-        mask_preds = fill_mask_preds(fm_pipeline, text, target_terms, pattern, top_k=1000, target_flag=False, sapect_token=pred)
+    if scoring_patterns:
+        #--------- aspect scoring --------
+        
+        pattern = SCORING_PATTERNS[scoring_patterns[0]]
+        for pred in preds:
+            target_terms=['good', 'great', 'amazing', 'bad', 'awful', 'horrible']
+            #mask_preds = fill_mask_preds(fm_pipeline, text, target_terms, pattern, top_k, target_flag=True, sapect_token=pred)
+            mask_preds = fill_mask_preds(fm_pipeline, text, target_terms, pattern, top_k=1000, target_flag=False, sapect_token=pred)
 
-        print ("mask preds: ", mask_preds)
+            print ("mask preds: ", mask_preds)
     
     return preds, pred_bio, hparams
 
-def extract_candidate_aspects(fm_pipeline, PATTERNS, text, tokens, model_name, pattern_names,
-                                    top_k=10, thresh=-1, target_flag=True, **kwargs):
+def extract_candidate_aspects(fm_pipeline, text, tokens, pattern_names,
+                                    top_k=10, thresh=-1, **kwargs):
 
     nouns = [ent.text for ent in spacy_model(text) if ent.pos_ == 'NOUN']
 

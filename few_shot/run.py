@@ -56,7 +56,7 @@ def train_eval(train_domain, num_labelled, **kwargs):
 def few_shot_experiment(labelled_amounts, **kwargs):
     actual_num_labelled = pattern_mlm_preprocess(labelled_amounts, **kwargs)
     pretrained_res = evaluate(**kwargs)
-    for train_domain in 'lap', 'rest':
+    for train_domain in kwargs['train_domains']:
         print(f"\n{'=' * 50}\n\t\t  Train Domain: {train_domain}\n{'=' * 50}")
         plot_data = {0: pretrained_res}
         for num_labelled in labelled_amounts:
@@ -65,7 +65,7 @@ def few_shot_experiment(labelled_amounts, **kwargs):
             plot_data[num_labelled] = res
         with open(f'plots/{train_domain}_plot_data_{time.strftime("%Y%m%d-%H%M%S")}.pkl', 'wb') as f:
             pickle.dump((plot_data, train_hparams, actual_num_labelled), f)
-        plot_few_shot(train_domain, plot_data, train_hparams, actual_num_labelled)
+        plot_few_shot(train_domain, plot_data, train_hparams, actual_num_labelled, **kwargs)
 
 
 def evaluate_patterns(pattern_names_list=(['P1', 'P2'], ['P2']), **kwargs):
@@ -77,13 +77,17 @@ def main():
     # sample_selection = 'take_positives' / 'match_positives' / 'negatives_with_none'
     # few_shot_experiment(pattern_name='P5', labelled_amounts=range(20, 101, 20), sample_selection='take_positives')
 
-    few_shot_experiment(pattern_names=('P5',), labelled_amounts=range(10, 51, 10), sample_selection='match_positives',
-        model_name='roberta-base') #, max_steps=5, test_limit=5)
+    # few_shot_experiment(pattern_names=('P5',), labelled_amounts=range(10, 51, 10), sample_selection='match_positives',
+    #     model_name='roberta-base') #, max_steps=5, test_limit=5)
 
+    few_shot_experiment(pattern_names=('P5',), labelled_amounts=range(100, 101), sample_selection='negatives_with_none',
+        model_name='roberta-base', train_domains=['rest'], test_domains=['rest'])#, max_steps=5, test_limit=5)
 
 if __name__ == "__main__":
     main()
 
-    # show last saved plots
-    # plot_few_shot('lap', *pickle.load(open(f'plots/lap_plot_data.pkl', 'rb')))
-    # plot_few_shot('rest', *pickle.load(open(f'plots/rest_plot_data.pkl', 'rb')))
+    # lap_plot = 'plots/lap_plot_data_20210404-175319.pkl'
+    # rest_plot = 'plots/rest_plot_data_20210404-183737.pkl'
+
+    # plot_few_shot('lap', *pickle.load(open(lap_plot, 'rb')))
+    # plot_few_shot('rest', *pickle.load(open(rest_plot, 'rb')))
