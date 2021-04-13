@@ -7,5 +7,4 @@ models
 mlm_data
 .venv
 plots/
-predictions
 mlm_data

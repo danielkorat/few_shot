@@ -175,28 +175,9 @@ def run_example(text, tokens, top_k=10, thresh=-1, target=True, **kwargs):
     return preds, valid_preds, pred_bio, preds_meta, hparams
 
 
-# def eval_ds_run_example(ds_dict, domain, model_name, pattern_names, exper_str, test_limit=None, **kwargs):
-#     all_preds_bio, all_preds, all_valid_preds, all_mask_preds, all_gold_bio = [], [], [], [], []
-#     for text, tokens, gold_bio, aspects in tqdm(ds_dict[domain]['test'][:test_limit]):
-#         preds, valid_preds, pred_bio, mask_preds, hparams = \
-#             run_example(text=text, tokens=tokens, model_name=model_name, pattern_names=pattern_names,  **kwargs)                                                  
-#         all_preds.append(preds)
-#         all_valid_preds.append(valid_preds)
-#         all_preds_bio.append(pred_bio)
-#         all_mask_preds.append(mask_preds)
-#         all_gold_bio.append(gold_bio)
-
-#     makedirs('predictions', exist_ok=True)
-#     with open(f'predictions/{domain}_{exper_str}.json', 'w') as f:
-#         json.dump((all_preds, all_mask_preds), f, indent=2)
-
-#     return {'metrics': metrics(all_gold_bio, all_preds_bio, domain, **kwargs), 'hparams': hparams}
-
-
 def eval_ds(ds_dict, domain, pattern_names, exper_str, scoring_patterns=None, test_limit=None, **kwargs):
     all_preds_bio, all_preds, all_gold_bio = [], [], []
     for text, tokens, gold_bio, aspects in tqdm(ds_dict[domain]['test'][:test_limit]):
-
 
         preds, pred_bio, hparams = \
             extract_aspects(text=text, tokens=tokens, pattern_names=pattern_names, scoring_patterns=scoring_patterns, **kwargs)                                                  
@@ -210,12 +191,6 @@ def eval_ds(ds_dict, domain, pattern_names, exper_str, scoring_patterns=None, te
         json.dump((all_preds), f, indent=2)
 
     return {'metrics': metrics(all_gold_bio, all_preds_bio, domain, **kwargs), 'hparams': hparams}
-
-    # makedirs('predictions', exist_ok=True)
-    # with open(f'predictions/{domain}.pkl', 'wb') as f:
-    #     pickle.dump((all_preds, all_mask_preds), f)
-
-    # return {'metrics': metrics(all_gold_bio, all_preds_bio, domain, **kwargs), 'hparams': hparams}
 
 
 def evaluate(exper_name='', post=False, **kwargs):

@@ -154,12 +154,12 @@ def generate_bio(tokens, preds):
     return pred_bio
 
 
-def fill_mask_preds(fm_pipeline, text, target_terms, pattern, top_k, target_flag, sapect_token=None):
+def fill_mask_preds(fm_pipeline, text, target_terms, pattern, top_k, target_flag, aspect_token=None):
     delim = ' ' if text[-1] in ('.', '!', '?') else '. '
     pattern = pattern.replace('<mask>', f"{fm_pipeline.tokenizer.mask_token}")
-    if sapect_token:
-        pattern = pattern.replace('<aspect>', sapect_token)
+    if aspect_token:
+        pattern = pattern.replace('<aspect>', aspect_token)
     mask_preds = fm_pipeline(delim.join([text, pattern]), top_k=top_k,
                             targets=target_terms if target_flag else None)
     
-    return(mask_preds)
+    return mask_preds
