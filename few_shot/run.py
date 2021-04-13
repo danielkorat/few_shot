@@ -73,18 +73,23 @@ def evaluate_patterns(pattern_names_list=(['P1', 'P2'], ['P2']), **kwargs):
         evaluate(pattern_names=pattern_names, **kwargs)
 
 
-def main():
-    # sample_selection = 'take_positives' / 'match_positives' / 'negatives_with_none'
-    # few_shot_experiment(pattern_name='P5', labelled_amounts=range(20, 101, 20), sample_selection='take_positives')
-
-    # few_shot_experiment(pattern_names=('P5',), labelled_amounts=range(10, 51, 10), sample_selection='match_positives',
-    #     model_name='roberta-base') #, max_steps=5, test_limit=5)
-
-    few_shot_experiment(pattern_names=('P5',), labelled_amounts=range(100, 101), sample_selection='negatives_with_none',
-        model_name='roberta-base', train_domains=['rest'], test_domains=['rest'])#, max_steps=5, test_limit=5)
+def main(smoke=False):
+    few_shot_experiment(
+        pattern_names=('P5',),
+        labelled_amounts=range(100, 101),
+        sample_selection='negatives_with_none',
+        model_name='roberta-base',
+        train_domains=['rest'],
+        test_domains=['rest'],
+        max_steps=5 if smoke else 1000,
+        test_limit=5 if smoke else None
+        )
 
 if __name__ == "__main__":
+    
     main()
+
+    main(smoke=True)
 
     # lap_plot = 'plots/lap_plot_data_20210404-175319.pkl'
     # rest_plot = 'plots/rest_plot_data_20210404-183737.pkl'
