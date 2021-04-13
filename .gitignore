@@ -6,5 +6,7 @@ models
 *.pkl
 mlm_data
 .venv
-plots/
+plots
+predictions
+eval
 mlm_data
