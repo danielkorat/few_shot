@@ -5,29 +5,34 @@ import spacy
 
 from patterns import PATTERNS, SCORING_PATTERNS
 
-models_dict = {}
+MODELS_DICT = {}
 
 spacy_model = spacy.load('en_core_web_sm')
 
-def get_fm_pipeline(model):
-    if model in models_dict:
-        fm_model = models_dict[model]
-    else:
-        print(f"\nLoading {model} fill-mask pipeline...\n")
-        stdout.flush()
-        fm_model = pipeline('fill-mask', model=model, framework="pt")
-        models_dict[model] = fm_model
-    return fm_model
+def get_fm_pipeline(model_name):
+    # If fine-tuned, prepend dir name and do not keep in memory
+    if 'rest_' in model_name or 'lap_' in model_name:
+        fm_pipeline = pipeline('fill-mask', model=f"models/{model_name}", framework="pt")
 
-def extract_aspects(text, tokens, pattern_names, scoring_patterns=None,
-                                    top_k=10, thresh=-1, target=True, **kwargs):
+    # Otherwise, load pipeline and keep in memory
+    elif model_name in MODELS_DICT:
+        fm_pipeline = MODELS_DICT[model_name]
+    else:
+        print(f"\nLoading {model_name} fill-mask pipeline...\n")
+        stdout.flush()
+        fm_pipeline = pipeline('fill-mask', model=model_name, framework="pt")
+        MODELS_DICT[model_name] = fm_pipeline
+
+    return fm_pipeline
+
+def extract_aspects(fm_pipeline, text, tokens, pattern_names, model_name, scoring_patterns=None,
+                            top_k=10, thresh=-1, target=True, **kwargs):
     
     hparams = locals()
     for v in 'text', 'tokens', 'kwargs':
         hparams.pop(v)
     hparams.update(kwargs)
-    fm_pipeline = get_fm_pipeline(kwargs['model_name'])
-
+    
     preds, pred_bio = extract_candidate_aspects(fm_pipeline, text, tokens, pattern_names,
                                                 top_k, thresh, target_flag=True, **kwargs)
 
@@ -37,12 +42,13 @@ def extract_aspects(text, tokens, pattern_names, scoring_patterns=None,
         pattern = SCORING_PATTERNS[scoring_patterns[0]]
         for pred in preds:
             target_terms=['good', 'great', 'amazing', 'bad', 'awful', 'horrible']
-            #mask_preds = fill_mask_preds(fm_pipeline, text, target_terms, pattern, top_k, target_flag=True, sapect_token=pred)
-            mask_preds = fill_mask_preds(fm_pipeline, text, target_terms, pattern, top_k=1000, target_flag=False, sapect_token=pred)
+            #mask_preds = fill_mask_preds(fm_pipeline, text, target_terms, pattern, top_k, target_flag=True, aspect_token=pred)
+            mask_preds = fill_mask_preds(fm_pipeline, text, target_terms, pattern, top_k=1000, target_flag=False, aspect_token=pred)
 
             print ("mask preds: ", mask_preds)
     
     return preds, pred_bio, hparams
+
 
 def extract_candidate_aspects(fm_pipeline, text, tokens, pattern_names,
                                     top_k=10, thresh=-1, **kwargs):
@@ -75,6 +81,16 @@ def extract_candidate_aspects(fm_pipeline, text, tokens, pattern_names,
 
     return preds, pred_bio
 
+
+def fill_mask_preds(fm_pipeline, text, target_terms, pattern, top_k, target_flag, aspect_token=None):
+    delim = ' ' if text[-1] in ('.', '!', '?') else '. '
+    pattern = pattern.replace('<mask>', f"{fm_pipeline.tokenizer.mask_token}")
+    if aspect_token:
+        pattern = pattern.replace('<aspect>', aspect_token)
+    mask_preds = fm_pipeline(delim.join([text, pattern]), top_k=top_k,
+                            targets=target_terms if target_flag else None)
+    return mask_preds
+    
 
 def score_aspects(fm_pipeline, text, preds, preds_all, PATTERNS, pattern_names):
     
@@ -144,22 +160,9 @@ def merge_mask_preds(mask_preds_all, strategy='union'):
 def generate_bio(tokens, preds):     
     idx_all =[]
     for pred in preds:
-        if pred =='pr':
-            print("sdsd")
         idx = tokens.index(pred) 
         idx_all.append(idx)
 
     pred_bio = ['B-ASP' if i in idx_all else 'O' for i in range(len(tokens))]
 
     return pred_bio
-
-
-def fill_mask_preds(fm_pipeline, text, target_terms, pattern, top_k, target_flag, aspect_token=None):
-    delim = ' ' if text[-1] in ('.', '!', '?') else '. '
-    pattern = pattern.replace('<mask>', f"{fm_pipeline.tokenizer.mask_token}")
-    if aspect_token:
-        pattern = pattern.replace('<aspect>', aspect_token)
-    mask_preds = fm_pipeline(delim.join([text, pattern]), top_k=top_k,
-                            targets=target_terms if target_flag else None)
-    
-    return mask_preds

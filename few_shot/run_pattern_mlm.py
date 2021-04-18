@@ -439,9 +439,7 @@ def main(args):
     results = {}
     if training_args.do_eval:
         logger.info("*** Evaluate ***")
-
         eval_output = trainer.evaluate()
-
         perplexity = math.exp(eval_output["eval_loss"])
         results["perplexity"] = perplexity
 
@@ -452,7 +450,6 @@ def main(args):
                 for key, value in sorted(results.items()):
                     logger.info(f"  {key} = {value}")
                     writer.write(f"{key} = {value}\n")
-
     return results
 
 
