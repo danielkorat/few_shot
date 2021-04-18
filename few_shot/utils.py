@@ -218,7 +218,7 @@ def eval_ds(ds_dict, test_domain, pattern_names, model_names,
     else:
         final_preds_bio = []
         for (_, tokens, *_), all_preds in zip(test_data, zip(*all_preds_list)):
-            bio = generate_bio(tokens=tokens, preds=[p for preds in all_preds for p in preds])
+            bio = generate_bio(tokens=tokens, preds=list({p for preds in all_preds for p in preds}))
             final_preds_bio.append(bio)
 
     with open(f"predictions/{'+'.join(model_names)}_{test_domain}.json", 'w') as f:
