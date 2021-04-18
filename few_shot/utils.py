@@ -1,5 +1,6 @@
 from os import makedirs
 import os
+from numpy.core.fromnumeric import nonzero
 from numpy.lib.shape_base import hsplit
 from transformers import pipeline
 from seqeval.metrics import f1_score, precision_score, recall_score,\
@@ -256,58 +257,55 @@ def apply_pattern(P1):
         return delim.join([text, P1])
     return apply
 
-def replace_mask(f, P, x, unique_count, count, replace_with):
-    unique_count += 1
-    P_x = P(x)
-    
-    for replacement in replace_with:
-        count += 1
-        line = P_x.replace('<mask>', replacement) + '\n'
-        f.write(line)
-    return unique_count, count
+def replace_mask(train_samples, path, P, none_replacement=None, limit=None, require_aspects=True):
+    count, unique_count = 0, 0
+
+    with open(path, 'w') as f:
+        for x, *_, aspects in train_samples[:limit]:
+            P_x = P(x)
+
+            if aspects or not require_aspects:
+                unique_count += 1
+
+                replacements = aspects if aspects else [none_replacement]
+
+                for replacement in replacements:
+                    count += 1
+                    line = P_x.replace('<mask>', replacement) + '\n'
+                    f.write(line)
+
+    return {'unique': unique_count, 'total': count}
 
 def create_mlm_train_sets(datasets, num_labelled, sample_selection, pattern_names, train_domains, **kwargs):
-    actual_labelled_amounts_list = []
+    actual_num_labelled = {}
+    makedirs('mlm_data', exist_ok=True)
 
-    for pattern_name in pattern_names:
-        P = apply_pattern(PATTERNS[pattern_name])
-        makedirs('mlm_data', exist_ok=True)
-        actual_labelled_amounts = {}
+    for train_domain in train_domains:
+        for pattern_name in pattern_names:
+            P = apply_pattern(PATTERNS[pattern_name])
 
-        for train_domain in train_domains:
-            count, unique_count = 0, 0
             train_samples = datasets[train_domain]['train']
             exper_str = f"{train_domain}_{pattern_name}_{num_labelled}_{sample_selection}"
-            train_out_path = f'mlm_data/{exper_str}.txt'
+            out_path = f'mlm_data/{exper_str}.txt'
 
-            with open(train_out_path, 'w') as f:
-                # Use only samples with aspects
-                if sample_selection == 'take_positives':
-                    for x, *_, aspects in train_samples[:num_labelled]:
-                        if aspects:
-                            unique_count, count = \
-                                replace_mask(f, P, x, unique_count, count, replace_with=aspects)
+            args = train_samples, out_path, P
 
-                # Use only samples with aspects, match required labelled amount
-                elif sample_selection == 'match_positives':
-                    for x, *_, aspects in train_samples:
-                        if aspects:
-                            unique_count, count = \
-                                replace_mask(f, P, x, unique_count, count, replace_with=aspects)
-                        if unique_count == num_labelled:
-                            break
-                    assert unique_count == num_labelled
+            # Use only samples with aspects
+            if sample_selection == 'take_positives':
+                counts = replace_mask(*args, limit=num_labelled)
 
-                # Insert 'NONE' as an aspect when there are no aspects
-                elif sample_selection == 'negatives_with_none':
-                    for x, *_, aspects in train_samples[:num_labelled]:
-                        replace_mask(f, P, x, unique_count, count, \
-                            replace_with=aspects if aspects else ['NONE'])
+            # Use only samples with aspects, match required labelled amount
+            elif sample_selection == 'match_positives':
+                counts = replace_mask(*args)
 
-            actual_labelled_amounts[train_domain] = (unique_count, count)
+            # Insert 'NONE' as an aspect when there are no aspects
+            elif sample_selection == 'negatives_with_none':
+                counts = replace_mask(*args, none_replacement='NONE', \
+                    limit=num_labelled, require_aspects=False)
 
-        actual_labelled_amounts_list.append(actual_labelled_amounts)
-    return actual_labelled_amounts_list
+        actual_num_labelled[train_domain] = counts
+
+    return actual_num_labelled
 
 
 def plot_per_domain(res_dicts, hparam, values, title):

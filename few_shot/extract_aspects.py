@@ -29,7 +29,7 @@ def extract_aspects(fm_pipeline, text, tokens, pattern_names, model_name, scorin
                             top_k=10, thresh=-1, target=True, **kwargs):
     
     hparams = locals()
-    for v in 'text', 'tokens', 'kwargs':
+    for v in 'text', 'tokens', 'kwargs', 'fm_pipeline':
         hparams.pop(v)
     hparams.update(kwargs)
     

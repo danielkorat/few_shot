@@ -31,6 +31,7 @@ def train_mlm(train_domain, num_labelled, pattern_names, sample_selection, seed=
     # os.environ["CUDA_VISIBLE_DEVICES"] = "0"
 
     for pattern_name in pattern_names:
+        print(f"Running train_mlm() for pattern {pattern_name}...")
         exper_str = f"{train_domain}_{pattern_name}_{num_labelled}_{sample_selection}"
         trained_model_names.append(exper_str)
 
@@ -67,9 +68,11 @@ def few_shot_experiment(num_labelled_list, train_domains, **kwargs):
     actual_num_labelled_list = pattern_mlm_preprocess(num_labelled_list, train_domains, **kwargs)
     pretrained_res = evaluate(**kwargs)
     for train_domain in train_domains:
+        print(f"Running few_shot_experiment() for train domain {train_domain}...")
         print(f"\n{'=' * 50}\n\t\t  Train Domain: {train_domain}\n{'=' * 50}")
         plot_data = {0: pretrained_res}
         for num_labelled in num_labelled_list:
+            print(f"Running num_labelled {num_labelled}...")
             print(f"\n{'-' * 50}\n\t\t  Num. Labelled: {num_labelled}\n{'-' * 50}")
             res, train_hparams = train_eval(train_domain, num_labelled, **kwargs)
             plot_data[num_labelled] = res
@@ -92,9 +95,10 @@ def main(smoke=False):
 
 if __name__ == "__main__":
 
-    main()
+    # main()
 
-    # main(smoke=True)
+    main(smoke=True)
+
 
     # lap_plot = 'plots/lap_plot_data_20210404-175319.pkl'
     # rest_plot = 'plots/rest_plot_data_20210404-183737.pkl'
