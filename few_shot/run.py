@@ -83,7 +83,9 @@ def few_shot_experiment(num_labelled_list, train_domains, **kwargs):
 
 def main(smoke=False):
     few_shot_experiment(
-        pattern_names=('P1', 'P5'),
+        # pattern_names=('P1',), # 'P2', 'P3', 'P4', 'P5', 'P6'),
+        pattern_names=[f'P{i}' for i in range(1, 10)],
+        # num_labelled_list=range(50, 151, 50),
         num_labelled_list=range(100, 101),
         sample_selection='negatives_with_none',
         model_names=('roberta-base',),
@@ -95,9 +97,9 @@ def main(smoke=False):
 
 if __name__ == "__main__":
 
-    # main()
+    main()
 
-    main(smoke=True)
+    # main(smoke=True)
 
 
     # lap_plot = 'plots/lap_plot_data_20210404-175319.pkl'

@@ -188,6 +188,8 @@ def eval_ds(ds_dict, test_domain, pattern_names, model_names,
 
     all_preds_list = []
     for i, (model_name, pattern_name) in enumerate(zip(model_names, pattern_names)):
+
+        print(f"Evaluating ({model_name}, {pattern_name})")
         fm_pipeline = get_fm_pipeline(model_name)
 
         all_preds_bio, all_preds = [], []
@@ -221,18 +223,27 @@ def eval_ds(ds_dict, test_domain, pattern_names, model_names,
             bio = generate_bio(tokens=tokens, preds=list({p for preds in all_preds for p in preds}))
             final_preds_bio.append(bio)
 
-    with open(f"predictions/{'+'.join(model_names)}_{test_domain}.json", 'w') as f:
+    preds_fname = f"{model_names[0]}_{test_domain}"
+    if len(model_names) > 1:
+        preds_fname = preds_fname.replace(pattern_names[0], '+'.join(pattern_names))
+
+    with open(f"predictions/{preds_fname}.json", 'w') as f:
         json.dump((final_preds_bio), f, indent=2)
 
     return {'metrics': metrics(all_gold_bio, final_preds_bio, test_domain, **kwargs), 'hparams': hparams}
 
 
-def evaluate(test_domains, pattern_names, model_names, post=False, **kwargs):
+def evaluate(test_domains, pattern_names, model_names, **kwargs):
     ds_dict = load_all_datasets()
     all_res = {}
+    
+    eval_fname = model_names[0]
+
+    if len(model_names) > 1:
+        eval_fname = eval_fname.replace(pattern_names[0], '+'.join(pattern_names))
 
     makedirs('eval', exist_ok=True)
-    with open(f"eval/{'+'.join(model_names)}.txt", 'w') as eval_f:
+    with open(f"eval/{eval_fname}.txt", 'w') as eval_f:
         for i, test_domain in enumerate(test_domains):
             res = eval_ds(ds_dict=ds_dict, model_names=model_names, test_domain=test_domain, 
                 pattern_names=pattern_names, **kwargs)

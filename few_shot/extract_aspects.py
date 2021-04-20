@@ -10,18 +10,22 @@ MODELS_DICT = {}
 spacy_model = spacy.load('en_core_web_sm')
 
 def get_fm_pipeline(model_name):
-    # If fine-tuned, prepend dir name and do not keep in memory
-    if 'rest_' in model_name or 'lap_' in model_name:
-        fm_pipeline = pipeline('fill-mask', model=f"models/{model_name}", framework="pt")
 
     # Otherwise, load pipeline and keep in memory
-    elif model_name in MODELS_DICT:
+    if model_name in MODELS_DICT:
         fm_pipeline = MODELS_DICT[model_name]
     else:
+        fine_tuned = 'rest_' in model_name or 'lap_' in model_name
+        if fine_tuned:
+            model_name = f"models/{model_name}"
+
         print(f"\nLoading {model_name} fill-mask pipeline...\n")
         stdout.flush()
         fm_pipeline = pipeline('fill-mask', model=model_name, framework="pt")
-        MODELS_DICT[model_name] = fm_pipeline
+
+        # If fine-tuned, do not keep in memory
+        if not fine_tuned:
+            MODELS_DICT[model_name] = fm_pipeline
 
     return fm_pipeline
 
