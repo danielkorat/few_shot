@@ -289,7 +289,8 @@ def replace_mask(train_samples, path, P, none_replacement=None, limit=None, requ
 
     return {'unique': unique_count, 'total': count}
 
-def replace_mask_scoring_pattern(f, P, x, unique_count, count, replace_aspects, replace_mask_token):
+def replace_mask_scoring_pattern(f, P, x, replace_aspects, replace_mask_token):
+    count, unique_count = 0, 0
     unique_count += 1
     P_x = P(x)
     
@@ -333,17 +334,19 @@ def create_mlm_train_sets(datasets, num_labelled, sample_selection, pattern_name
                         limit=num_labelled, require_aspects=False)
 
             if masking_strategy == 'aspect_scoring': 
+                counts=0
                 with open(out_path, 'w') as f:
                     for txt, *_, gold_aspects in train_samples[:num_labelled]:
-                                # create positive examples
-                                replace_mask_scoring_pattern(f, P, txt, unique_count, count, \
-                                    replace_aspects=gold_aspects, replace_mask='Yes')
-                                # create negative examples: extract non-aspect nouns     
-                                nouns = [ent.text for ent in spacy_model(txt) if ent.pos_ == 'NOUN']
-                                non_asps = [x for x in nouns if x not in gold_aspects] 
-                                if non_asps:
-                                    replace_mask_scoring_pattern(f, P, txt, unique_count, count, \
-                                        replace_aspects=non_asps, replace_mask='No')  
+                        # create positive examples
+                        replace_mask_scoring_pattern(f, P, txt, \
+                            replace_aspects=gold_aspects, replace_mask_token='Yes')
+                        # create negative examples: extract non-aspect nouns     
+                        nouns = [ent.text for ent in spacy_model(txt) if ent.pos_ == 'NOUN']
+                        non_asps = [x for x in nouns if x not in gold_aspects] 
+                        if non_asps:
+                            replace_mask_scoring_pattern(f, P, txt, \
+                                replace_aspects=non_asps, replace_mask_token='No') 
+
         actual_num_labelled[train_domain] = counts                                 
                         # copy replace_mask and 
 
