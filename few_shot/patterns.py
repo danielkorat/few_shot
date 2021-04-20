@@ -1,3 +1,8 @@
+import pathlib
+
+ROOT = pathlib.Path(__file__).parent.parent.absolute()
+
+
 # Mask Patterns
 P1 = "So, the <mask> is the interesting aspect."
 P2 = "So, the interesting aspect is <mask>."

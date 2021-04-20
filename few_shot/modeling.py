@@ -33,7 +33,7 @@ class DataCollatorForPatternLanguageModeling(DataCollatorForLanguageModeling):
         probability_matrix.masked_fill_(special_tokens_mask, value=0.0)
 
         # Pattern MLM: set pattern-mask token masking probability to 1.0:
-        for label_vector, prob_vector in zip( labels.tolist(), probability_matrix):
+        for label_vector, prob_vector in zip(labels.tolist(), probability_matrix):
             mask_idx = (label_vector + [1]).index(1) + self.pattern_mask_idx - 1
             prob_vector[mask_idx] = 1.0
 

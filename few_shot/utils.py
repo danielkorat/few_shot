@@ -1,4 +1,4 @@
-from few_shot import ROOT
+from patterns import ROOT
 from os import makedirs
 import os
 from numpy.core.fromnumeric import nonzero
@@ -66,7 +66,7 @@ def load_dataset(csv_url, json_url, multi_token=False):
 
 
 def load_all_datasets(verbose=False, train_size=200):
-    makedirs(ROOT / 'data', exist_ok=True)
+    makedirs(str(ROOT / 'data'), exist_ok=True)
     if not os.path.exists(ROOT / "data" / f"lap_train_{train_size}.json"):   
         for domain_name, domain in zip(DOMAIN_NAMES, ('restaurants', 'laptops')):
             ds = load_dataset(f"{domain}.csv", f"{domain}/{domain}_train_sents.json")
@@ -85,7 +85,7 @@ def load_all_datasets(verbose=False, train_size=200):
                 json.dump(test, test_f, indent=2)
     else:
         print("Loading dataset from json...")
-    return {domain: {split: json.load(open(ROOT / "data" / f"{domain_name}_{split}_{train_size}.json")) \
+    return {domain: {split: json.load(open(ROOT / "data" / f"{domain}_{split}_{train_size}.json")) \
         for split in ('train', 'test')} for domain in DOMAIN_NAMES}
 
 

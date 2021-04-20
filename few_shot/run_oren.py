@@ -1,4 +1,4 @@
-from few_shot import ROOT
+from patterns import ROOT
 from utils import load_all_datasets, evaluate, create_mlm_train_sets, plot_few_shot, PATTERNS, SCORING_PATTERNS, eval_ds
 from run_pattern_mlm import main as run_pattern_mlm
 import os
@@ -21,7 +21,7 @@ def train_mlm(train_domain, num_labelled, pattern_name, seed=42, lr=1e-05, max_s
     for v in 'train_domain', 'num_labelled', 'kwargs':
         hparams.pop(v)
 
-    os.makedirs(ROOT / 'models', exist_ok=True)
+    os.makedirs(str(ROOT / 'models'), exist_ok=True)
     output_dir = f"models/p-mlm_model_{train_domain}_{num_labelled}"
 
     # hparams used in PET: 
