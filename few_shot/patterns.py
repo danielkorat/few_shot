@@ -19,5 +19,13 @@ P_B4 = "<mask>, the aspect is <aspect>."
 P_B5 = "<mask>, the aspect in my review is <aspect>."
 P_B6 = "<mask>, the topic of my review is <aspect>."
 P_B7 = "Is it true that the aspect is <aspect>? <mask>."
+P_B8 = "The sentiment towards <aspect> is <mask>."
+P_B9 = "The opinion towards <aspect> is <mask>."
+P_B10 ="So my review towards the <aspect> is <mask>"
+P_B11 ="Is <aspect> the aspect in the previous sentence? <mask>"
 
-SCORING_PATTERNS = {'P_B1': P_B1, 'P_B2': P_B2, 'P_B3': P_B3, 'P_B4': P_B4, 'P_B5': P_B5, 'P_B6': P_B6, 'P_B7': P_B7}
+P_B12 ="Is there sentiment towards <aspect> in the previous sentence? <mask>"
+P_B13 ="So, does the review in the previous sentence focuses on the <aspect>? <mask>"
+P_B14 ="So, does this review focuses on the <aspect>? <mask>"
+
+SCORING_PATTERNS = {'P_B1': P_B1, 'P_B2': P_B2, 'P_B3': P_B3, 'P_B4': P_B4, 'P_B5': P_B5, 'P_B6': P_B6, 'P_B7': P_B7, 'P_B8': P_B8, 'P_B9': P_B9, 'P_B10': P_B10, 'P_B11': P_B11, 'P_B12': P_B12}

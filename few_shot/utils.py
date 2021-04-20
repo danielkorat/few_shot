@@ -13,13 +13,14 @@ from matplotlib import pyplot as plt
 import numpy as np
 import seaborn as sns
 from extract_aspects import extract_aspects, get_fm_pipeline
-
+import spacy
 from patterns import PATTERNS, SCORING_PATTERNS
-
 
 logging.disable(logging.WARNING)
 
 from tqdm import tqdm as tq
+
+spacy_model = spacy.load('en_core_web_sm')
 
 def tqdm(iter, **kwargs):
     return tq(list(iter), kwargs, position=0, leave=True, file=stdout)
@@ -265,9 +266,25 @@ def replace_mask(f, P, x, unique_count, count, replace_with):
         f.write(line)
     return unique_count, count
 
+def replace_mask_scoring_pattern(f, P, x, unique_count, count, replace_aspects, replace_mask):
+    unique_count += 1
+    P_x = P(x)
+    
+    for replace_asp in replace_aspects:
+        count += 1
+        pattern = P_x.replace('<aspect>', replace_asp)
+        line = pattern.replace('<mask>', replace_mask) + '\n'
+        f.write(line)
+    return unique_count, count    
+
 def create_mlm_train_sets(ds_dict, labelled_amount, sample_selection, **kwargs):
-    pattern_name = kwargs['pattern_names'][0]   
-    P = apply_pattern(PATTERNS[pattern_name])
+    pattern_name = kwargs['pattern_names'][0] 
+    masking_strategy = kwargs['masking_strategy']
+    if masking_strategy == 'aspect_masking':  
+        P = apply_pattern(PATTERNS[pattern_name])
+    elif masking_strategy == 'aspect_scoring':  
+        P = apply_pattern(SCORING_PATTERNS[pattern_name])
+
     makedirs('mlm_data', exist_ok=True)
     actual_labelled_amounts = {}
 
@@ -276,29 +293,44 @@ def create_mlm_train_sets(ds_dict, labelled_amount, sample_selection, **kwargs):
         train_samples = ds_dict[domain]['train']
         train_out_path = f'mlm_data/{domain}_train_{labelled_amount}_{pattern_name}.txt'
 
-        with open(train_out_path, 'w') as f:
-            # Use only samples with aspects
-            if sample_selection == 'take_positives':
-                for x, *_, aspects in train_samples[:labelled_amount]:
-                    if aspects:
-                        unique_count, count = \
-                            replace_mask(f, P, x, unique_count, count, replace_with=aspects)
+        if masking_strategy == 'aspect_masking':
+            with open(train_out_path, 'w') as f:
+                # Use only samples with aspects
+                if sample_selection == 'take_positives':
+                    for x, *_, aspects in train_samples[:labelled_amount]:
+                        if aspects:
+                            unique_count, count = \
+                                replace_mask(f, P, x, unique_count, count, replace_with=aspects)
 
-            # Use only samples with aspects, match required labelled amount
-            elif sample_selection == 'match_positives':
-                for x, *_, aspects in train_samples:
-                    if aspects:
-                        unique_count, count = \
-                            replace_mask(f, P, x, unique_count, count, replace_with=aspects)
-                    if unique_count == labelled_amount:
-                        break
-                assert unique_count == labelled_amount
+                # Use only samples with aspects, match required labelled amount
+                elif sample_selection == 'match_positives':
+                    for x, *_, aspects in train_samples:
+                        if aspects:
+                            unique_count, count = \
+                                replace_mask(f, P, x, unique_count, count, replace_with=aspects)
+                        if unique_count == labelled_amount:
+                            break
+                    assert unique_count == labelled_amount
 
-            # Insert 'NONE' as an aspect when there are no aspects
-            elif sample_selection == 'negatives_with_none':
-                for x, *_, aspects in train_samples[:labelled_amount]:
-                    replace_mask(f, P, x, unique_count, count, \
-                        replace_with=aspects if aspects else ['NONE'])
+                # Insert 'NONE' as an aspect when there are no aspects
+                elif sample_selection == 'negatives_with_none':
+                    for x, *_, aspects in train_samples[:labelled_amount]:
+                        replace_mask(f, P, x, unique_count, count, \
+                            replace_with=aspects if aspects else ['NONE'])
+
+        if masking_strategy == 'aspect_scoring': 
+            with open(train_out_path, 'w') as f:
+                for txt, *_, gold_aspects in train_samples[:labelled_amount]:
+                            # create positive examples
+                            replace_mask_scoring_pattern(f, P, txt, unique_count, count, \
+                                replace_aspects=gold_aspects, replace_mask='Yes')
+                            # create negative examples: extract non-aspect nouns     
+                            nouns = [ent.text for ent in spacy_model(txt) if ent.pos_ == 'NOUN']
+                            non_asps = [x for x in nouns if x not in gold_aspects] 
+                            if non_asps:
+                                replace_mask_scoring_pattern(f, P, txt, unique_count, count, \
+                                    replace_aspects=non_asps, replace_mask='No')   
+                    # copy replace_mask and 
 
         actual_labelled_amounts[domain] = (unique_count, count)
     return actual_labelled_amounts
