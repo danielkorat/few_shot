@@ -1,3 +1,4 @@
+from few_shot import ROOT
 from os import makedirs
 import os
 from numpy.core.fromnumeric import nonzero
@@ -65,8 +66,8 @@ def load_dataset(csv_url, json_url, multi_token=False):
 
 
 def load_all_datasets(verbose=False, train_size=200):
-    makedirs('data', exist_ok=True)
-    if not os.path.exists(f"data/lap_train_{train_size}.json"):   
+    makedirs(ROOT / 'data', exist_ok=True)
+    if not os.path.exists(ROOT / "data" / f"lap_train_{train_size}.json"):   
         for domain_name, domain in zip(DOMAIN_NAMES, ('restaurants', 'laptops')):
             ds = load_dataset(f"{domain}.csv", f"{domain}/{domain}_train_sents.json")
             if verbose:
@@ -78,14 +79,14 @@ def load_all_datasets(verbose=False, train_size=200):
             print(f"{domain} size (train/test): {len(train)}/{len(test)}")
 
             print("Writing datest to json...")
-            with open(f"data/{domain_name}_train_{train_size}.json", 'w') as train_f:
+            with open(ROOT / "data" / "{domain_name}_train_{train_size}.json", 'w') as train_f:
                 json.dump(train, train_f, indent=2)
-            with open(f"data/{domain_name}_test_{train_size}.json", 'w') as test_f:
+            with open(ROOT / "data" / f"{domain_name}_test_{train_size}.json", 'w') as test_f:
                 json.dump(test, test_f, indent=2)
     else:
         print("Loading dataset from json...")
-    return {domain_name: {split: json.load(open(f"data/{domain_name}_{split}_{train_size}.json")) for split in ('train', 'test')} \
-        for domain_name in DOMAIN_NAMES}
+    return {domain: {split: json.load(open(ROOT / "data" / f"{domain_name}_{split}_{train_size}.json")) \
+        for split in ('train', 'test')} for domain in DOMAIN_NAMES}
 
 
 def run_ds_examples(ds, model_name, pattern_name, **kwargs):
@@ -207,8 +208,8 @@ def eval_ds(ds_dict, test_domain, pattern_names, model_names,
                 all_gold_bio.append(gold_bio)
 
         # write predictions to file
-        makedirs('predictions', exist_ok=True)
-        with open(f'predictions/{model_name}_{pattern_name}_{test_domain}.json', 'w') as f:
+        makedirs(ROOT / 'predictions', exist_ok=True)
+        with open(ROOT / 'predictions' / f'{model_name}_{pattern_name}_{test_domain}.json', 'w') as f:
             json.dump((all_preds), f, indent=2)
 
         all_preds_list.append(all_preds)
@@ -242,8 +243,8 @@ def evaluate(test_domains, pattern_names, model_names, **kwargs):
     if len(model_names) > 1:
         eval_fname = eval_fname.replace(pattern_names[0], '+'.join(pattern_names))
 
-    makedirs('eval', exist_ok=True)
-    with open(f"eval/{eval_fname}.txt", 'w') as eval_f:
+    makedirs(ROOT / 'eval', exist_ok=True)
+    with open(ROOT / "eval" / f"{eval_fname}.txt", 'w') as eval_f:
         for i, test_domain in enumerate(test_domains):
             res = eval_ds(ds_dict=ds_dict, model_names=model_names, test_domain=test_domain, 
                 pattern_names=pattern_names, **kwargs)
@@ -289,7 +290,7 @@ def replace_mask(train_samples, path, P, none_replacement=None, limit=None, requ
 
 def create_mlm_train_sets(datasets, num_labelled, sample_selection, pattern_names, train_domains, **kwargs):
     actual_num_labelled = {}
-    makedirs('mlm_data', exist_ok=True)
+    makedirs(ROOT / 'mlm_data', exist_ok=True)
 
     for train_domain in train_domains:
         for pattern_name in pattern_names:
@@ -297,7 +298,7 @@ def create_mlm_train_sets(datasets, num_labelled, sample_selection, pattern_name
 
             train_samples = datasets[train_domain]['train']
             exper_str = f"{train_domain}_{pattern_name}_{num_labelled}_{sample_selection}"
-            out_path = f'mlm_data/{exper_str}.txt'
+            out_path = ROOT / 'mlm_data' / f'{exper_str}.txt'
 
             args = train_samples, out_path, P
 

@@ -1,3 +1,4 @@
+from few_shot import ROOT
 from utils import load_all_datasets, evaluate, create_mlm_train_sets, plot_few_shot, PATTERNS
 from run_pattern_mlm import main as run_pattern_mlm
 import os
@@ -43,10 +44,10 @@ def train_mlm(train_domain, num_labelled, pattern_names, sample_selection, seed=
         "--learning_rate", str(lr),
         "--max_seq_length", str(max_seq),
         "--max_steps", str(max_steps),
-        "--train_file", f"mlm_data/{exper_str}.txt",
+        "--train_file", ROOT / "mlm_data" / f"{exper_str}.txt",
         "--per_device_train_batch_size", str(batch_size),
         "--line_by_line", 
-        "--output_dir", f"models/{exper_str}",
+        "--output_dir", ROOT / "models" f"{exper_str}",
         "--do_train", "--overwrite_output_dir", 
         "--model_name_or_path", model_name,
         "--overwrite_cache"
@@ -76,7 +77,7 @@ def few_shot_experiment(num_labelled_list, train_domains, **kwargs):
             print(f"\n{'-' * 50}\n\t\t  Num. Labelled: {num_labelled}\n{'-' * 50}")
             res, train_hparams = train_eval(train_domain, num_labelled, **kwargs)
             plot_data[num_labelled] = res
-        with open(f'plots/{train_domain}_plot_data_{time.strftime("%Y%m%d-%H%M%S")}.pkl', 'wb') as f:
+        with open(ROOT / 'plots' / f"{train_domain}_plot_data_{time.strftime("%Y%m%d-%H%M%S")}.pkl", 'wb') as f:
             pickle.dump((plot_data, train_hparams, actual_num_labelled_list), f)
         plot_few_shot(train_domain, plot_data, train_hparams, actual_num_labelled_list, **kwargs)
 
