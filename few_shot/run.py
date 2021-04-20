@@ -1,3 +1,4 @@
+from patterns import ROOT
 from utils import load_all_datasets, evaluate, create_mlm_train_sets, plot_few_shot, PATTERNS
 from run_pattern_mlm import main as run_pattern_mlm
 import os
@@ -6,85 +7,101 @@ import time
 
 os.environ["TOKENIZERS_PARALLELISM"] = 'false'
 
-def pattern_mlm_preprocess(labelled_amounts, sample_selection, **kwargs):
-    datasets = load_all_datasets()
+def pattern_mlm_preprocess(num_labelled_list, train_domains, sample_selection, **kwargs):
+    ds = load_all_datasets()
     res = {}
     # Prepare Pattern-MLM Training
     # Write splits to '/mlm_data'
-    for num_labelled in labelled_amounts:
-        amounts = create_mlm_train_sets(datasets, num_labelled, sample_selection, **kwargs)
+    for num_labelled in num_labelled_list:
+        amounts = create_mlm_train_sets(datasets=ds, num_labelled=num_labelled,
+            sample_selection=sample_selection, train_domains=train_domains, **kwargs)
         res[num_labelled] = amounts
     return res
 
-def train_mlm(train_domain, num_labelled, pattern_names, seed=42, lr=1e-05, max_seq=256, max_steps=1000, batch_size=16,
+def train_mlm(train_domain, num_labelled, pattern_names, sample_selection, seed=42, lr=1e-05, max_seq=256, max_steps=1000, batch_size=16,
             validation=None, model_type='roberta', model_name='roberta-base', **kwargs):
     hparams = locals()
     for v in 'train_domain', 'num_labelled', 'kwargs':
         hparams.pop(v)
-
+    trained_model_names = []
     os.makedirs('models', exist_ok=True)
-    output_dir = f"models/p-mlm_model_{train_domain}_{num_labelled}"
 
     # hparams used in PET: 
     # lr", "1x10^-5, batch_size", "16, max_len", "256, steps", "1000
     # every batch: 4 labelled + 12 unlabelled
     # os.environ["CUDA_VISIBLE_DEVICES"] = "0"
 
-    run_pattern_mlm([
-    "--pattern", PATTERNS[pattern_names[0]],
-    "--seed", str(seed),
-    # "--num_train_epochs", "1",
-    "--learning_rate", str(lr),
-    "--max_seq_length", str(max_seq),
-    "--max_steps", str(max_steps),
-    "--train_file", "mlm_data/" + train_domain + f'_train_{num_labelled}_{pattern_names[0]}.txt',
-    "--per_device_train_batch_size", str(batch_size),
-    # "--validation_file", "mlm_data/" + validation,
-    # "--do_eval", "--validation_file", "mlm_data/rest_test.txt",
-    # "--evaluation_strategy", "epoch",
-    "--line_by_line", "--output_dir", output_dir,
-    "--model_type", model_type, "--model_name_or_path", model_name,
-    "--do_train", "--overwrite_output_dir", "--overwrite_cache"])
-    return output_dir, hparams
+    for pattern_name in pattern_names:
+        print(f"Running train_mlm() for pattern {pattern_name}...")
+        exper_str = f"{train_domain}_{pattern_name}_{num_labelled}_{sample_selection}"
+        trained_model_names.append(exper_str)
+
+        run_pattern_mlm([
+        "--seed", str(seed),
+        "--model_type", model_type, 
+        "--pattern", PATTERNS[pattern_name],
+        # "--num_train_epochs", "1",
+        "--learning_rate", str(lr),
+        "--max_seq_length", str(max_seq),
+        "--max_steps", str(max_steps),
+        "--train_file", str(ROOT / "mlm_data" / f"{exper_str}.txt"),
+        "--per_device_train_batch_size", str(batch_size),
+        "--line_by_line", 
+        "--output_dir", str(ROOT / "models" f"{exper_str}"),
+        "--do_train", "--overwrite_output_dir", 
+        "--model_name_or_path", model_name,
+        "--overwrite_cache"
+        # "--validation_file", "mlm_data/" + validation,
+        # "--do_eval", "--validation_file", "mlm_data/rest_test.txt",
+        # "--evaluation_strategy", "epoch",
+        ])
+
+    return trained_model_names, hparams
 
 def train_eval(train_domain, num_labelled, **kwargs):
-    p_mlm_model, hparams = train_mlm(train_domain, num_labelled, **kwargs)
-    kwargs['model_name'] = p_mlm_model
-    eval_res = evaluate(exper_name=f"{num_labelled}", **kwargs)
+    trained_models, hparams = train_mlm(train_domain, num_labelled, **kwargs)
+    kwargs.pop('model_names')
+    eval_res = evaluate(model_names=trained_models, **kwargs)
     return eval_res, hparams
 
-def few_shot_experiment(labelled_amounts, **kwargs):
-    actual_num_labelled = pattern_mlm_preprocess(labelled_amounts, **kwargs)
+
+def few_shot_experiment(num_labelled_list, train_domains, **kwargs):
+    actual_num_labelled_list = pattern_mlm_preprocess(num_labelled_list, train_domains, **kwargs)
     pretrained_res = evaluate(**kwargs)
-    for train_domain in kwargs['train_domains']:
+    for train_domain in train_domains:
+        print(f"Running few_shot_experiment() for train domain {train_domain}...")
         print(f"\n{'=' * 50}\n\t\t  Train Domain: {train_domain}\n{'=' * 50}")
         plot_data = {0: pretrained_res}
-        for num_labelled in labelled_amounts:
+        for num_labelled in num_labelled_list:
+            print(f"Running num_labelled {num_labelled}...")
             print(f"\n{'-' * 50}\n\t\t  Num. Labelled: {num_labelled}\n{'-' * 50}")
             res, train_hparams = train_eval(train_domain, num_labelled, **kwargs)
             plot_data[num_labelled] = res
-        with open(f'plots/{train_domain}_plot_data_{time.strftime("%Y%m%d-%H%M%S")}.pkl', 'wb') as f:
-            pickle.dump((plot_data, train_hparams, actual_num_labelled), f)
-        plot_few_shot(train_domain, plot_data, train_hparams, actual_num_labelled, **kwargs)
+        with open(str(ROOT / 'plots' / f'{train_domain}_plot_data_{time.strftime("%Y%m%d-%H%M%S")}.pkl'), 'wb') as f:
+            pickle.dump((plot_data, train_hparams, actual_num_labelled_list), f)
+        plot_few_shot(train_domain, plot_data, train_hparams, actual_num_labelled_list, **kwargs)
 
 
-def evaluate_patterns(pattern_names_list=(['P1', 'P2'], ['P2']), **kwargs):
-    for pattern_names in pattern_names_list:
-        evaluate(pattern_names=pattern_names, **kwargs)
-
-
-def main():
-    # sample_selection = 'take_positives' / 'match_positives' / 'negatives_with_none'
-    # few_shot_experiment(pattern_name='P5', labelled_amounts=range(20, 101, 20), sample_selection='take_positives')
-
-    # few_shot_experiment(pattern_names=('P5',), labelled_amounts=range(10, 51, 10), sample_selection='match_positives',
-    #     model_name='roberta-base') #, max_steps=5, test_limit=5)
-
-    few_shot_experiment(pattern_names=('P5',), labelled_amounts=range(100, 101), sample_selection='negatives_with_none',
-        model_name='roberta-base', train_domains=['rest'], test_domains=['rest'])#, max_steps=5, test_limit=5)
+def main(smoke=False):
+    few_shot_experiment(
+        # pattern_names=('P1',), # 'P2', 'P3', 'P4', 'P5', 'P6'),
+        pattern_names=[f'P{i}' for i in range(1, 10)],
+        # num_labelled_list=range(50, 151, 50),
+        num_labelled_list=range(100, 101),
+        sample_selection='negatives_with_none',
+        model_names=('roberta-base',),
+        train_domains=['rest'],
+        test_domains=['rest'],
+        max_steps=5 if smoke else 1000,
+        test_limit=5 if smoke else None
+        )
 
 if __name__ == "__main__":
-    main()
+
+    # main()
+
+    main(smoke=True)
+
 
     # lap_plot = 'plots/lap_plot_data_20210404-175319.pkl'
     # rest_plot = 'plots/rest_plot_data_20210404-183737.pkl'

@@ -1,5 +1,7 @@
+from patterns import ROOT
 from os import makedirs
 import os
+from numpy.core.fromnumeric import nonzero
 from numpy.lib.shape_base import hsplit
 from transformers import pipeline
 from seqeval.metrics import f1_score, precision_score, recall_score,\
@@ -12,7 +14,7 @@ import plotly.express as px
 from matplotlib import pyplot as plt
 import numpy as np
 import seaborn as sns
-from extract_aspects import extract_aspects, get_fm_pipeline
+from extract_aspects import extract_aspects, generate_bio, get_fm_pipeline
 import spacy
 from patterns import PATTERNS, SCORING_PATTERNS
 
@@ -65,8 +67,8 @@ def load_dataset(csv_url, json_url, multi_token=False):
 
 
 def load_all_datasets(verbose=False, train_size=200):
-    makedirs('data', exist_ok=True)
-    if not os.path.exists(f"data/lap_train_{train_size}.json"):   
+    makedirs(str(ROOT / 'data'), exist_ok=True)
+    if not os.path.exists(ROOT / "data" / f"lap_train_{train_size}.json"):   
         for domain_name, domain in zip(DOMAIN_NAMES, ('restaurants', 'laptops')):
             ds = load_dataset(f"{domain}.csv", f"{domain}/{domain}_train_sents.json")
             if verbose:
@@ -78,14 +80,14 @@ def load_all_datasets(verbose=False, train_size=200):
             print(f"{domain} size (train/test): {len(train)}/{len(test)}")
 
             print("Writing datest to json...")
-            with open(f"data/{domain_name}_train_{train_size}.json", 'w') as train_f:
+            with open(ROOT / "data" / "{domain_name}_train_{train_size}.json", 'w') as train_f:
                 json.dump(train, train_f, indent=2)
-            with open(f"data/{domain_name}_test_{train_size}.json", 'w') as test_f:
+            with open(ROOT / "data" / f"{domain_name}_test_{train_size}.json", 'w') as test_f:
                 json.dump(test, test_f, indent=2)
     else:
         print("Loading dataset from json...")
-    return {domain_name: {split: json.load(open(f"data/{domain_name}_{split}_{train_size}.json")) for split in ('train', 'test')} \
-        for domain_name in DOMAIN_NAMES}
+    return {domain: {split: json.load(open(ROOT / "data" / f"{domain}_{split}_{train_size}.json")) \
+        for split in ('train', 'test')} for domain in DOMAIN_NAMES}
 
 
 def run_ds_examples(ds, model_name, pattern_name, **kwargs):
@@ -176,63 +178,81 @@ def run_example(text, tokens, top_k=10, thresh=-1, target=True, **kwargs):
     return preds, valid_preds, pred_bio, preds_meta, hparams
 
 
-# def eval_ds_run_example(ds_dict, domain, model_name, pattern_names, exper_str, test_limit=None, **kwargs):
-#     all_preds_bio, all_preds, all_valid_preds, all_mask_preds, all_gold_bio = [], [], [], [], []
-#     for text, tokens, gold_bio, aspects in tqdm(ds_dict[domain]['test'][:test_limit]):
-#         preds, valid_preds, pred_bio, mask_preds, hparams = \
-#             run_example(text=text, tokens=tokens, model_name=model_name, pattern_names=pattern_names,  **kwargs)                                                  
-#         all_preds.append(preds)
-#         all_valid_preds.append(valid_preds)
-#         all_preds_bio.append(pred_bio)
-#         all_mask_preds.append(mask_preds)
-#         all_gold_bio.append(gold_bio)
+def eval_ds(ds_dict, test_domain, pattern_names, model_names,
+        scoring_patterns=None, test_limit=None, **kwargs):
 
-#     makedirs('predictions', exist_ok=True)
-#     with open(f'predictions/{domain}_{exper_str}.json', 'w') as f:
-#         json.dump((all_preds, all_mask_preds), f, indent=2)
+    test_data = ds_dict[test_domain]['test'][:test_limit]
+    all_gold_bio = []
 
-#     return {'metrics': metrics(all_gold_bio, all_preds_bio, domain, **kwargs), 'hparams': hparams}
+    # in case of pre-trained model evaluation
+    if len(model_names) != len(pattern_names):
+        model_names *= len(pattern_names)
+
+    all_preds_list = []
+    for i, (model_name, pattern_name) in enumerate(zip(model_names, pattern_names)):
+
+        print(f"Evaluating ({model_name}, {pattern_name})")
+        fm_pipeline = get_fm_pipeline(model_name)
+
+        all_preds_bio, all_preds = [], []
+
+        for text, tokens, gold_bio, aspects in tqdm(test_data):
+
+            preds, preds_bio, hparams = extract_aspects(fm_pipeline=fm_pipeline,
+                text=text, tokens=tokens, model_name=model_name,\
+                pattern_names=(pattern_name,), scoring_patterns=scoring_patterns, **kwargs)
+
+            all_preds.append(preds)
+            all_preds_bio.append(preds_bio)
+
+            if i == 0:
+                all_gold_bio.append(gold_bio)
+
+        # write predictions to file
+        makedirs(ROOT / 'predictions', exist_ok=True)
+        with open(ROOT / 'predictions' / f'{model_name}_{pattern_name}_{test_domain}.json', 'w') as f:
+            json.dump((all_preds), f, indent=2)
+
+        all_preds_list.append(all_preds)
+
+    if len(pattern_names) == 1:
+        final_preds_bio = all_preds_bio
+    
+    # Merge predictions in case of multiple patterns
+    else:
+        final_preds_bio = []
+        for (_, tokens, *_), all_preds in zip(test_data, zip(*all_preds_list)):
+            bio = generate_bio(tokens=tokens, preds=list({p for preds in all_preds for p in preds}))
+            final_preds_bio.append(bio)
+
+    preds_fname = f"{model_names[0]}_{test_domain}"
+    if len(model_names) > 1:
+        preds_fname = preds_fname.replace(pattern_names[0], '+'.join(pattern_names))
+
+    with open(f"predictions/{preds_fname}.json", 'w') as f:
+        json.dump((final_preds_bio), f, indent=2)
+
+    return {'metrics': metrics(all_gold_bio, final_preds_bio, test_domain, **kwargs), 'hparams': hparams}
 
 
-def eval_ds(ds_dict, domain, pattern_names, exper_str, scoring_patterns=None, test_limit=None, **kwargs):
-    all_preds_bio, all_preds, all_gold_bio = [], [], []
-    for text, tokens, gold_bio, aspects in tqdm(ds_dict[domain]['test'][:test_limit]):
-
-
-        preds, pred_bio, hparams = \
-            extract_aspects(text=text, tokens=tokens, pattern_names=pattern_names, scoring_patterns=scoring_patterns, **kwargs)                                                  
-        all_preds.append(preds)
-        all_preds_bio.append(pred_bio)
-        all_gold_bio.append(gold_bio)
-
-    # write predictions to file
-    makedirs('predictions', exist_ok=True)
-    with open(f'predictions/{domain}_{exper_str}.json', 'w') as f:
-        json.dump((all_preds), f, indent=2)
-
-    return {'metrics': metrics(all_gold_bio, all_preds_bio, domain, **kwargs), 'hparams': hparams}
-
-    # makedirs('predictions', exist_ok=True)
-    # with open(f'predictions/{domain}.pkl', 'wb') as f:
-    #     pickle.dump((all_preds, all_mask_preds), f)
-
-    # return {'metrics': metrics(all_gold_bio, all_preds_bio, domain, **kwargs), 'hparams': hparams}
-
-
-def evaluate(exper_name='', post=False, **kwargs):
-    if exper_name:
-        exper_name = '_' + exper_name
+def evaluate(test_domains, pattern_names, model_names, **kwargs):
     ds_dict = load_all_datasets()
     all_res = {}
-    exper_str = f"{kwargs['model_name'].replace('models/', '')}{exper_name}"
-    makedirs('eval', exist_ok=True)
-    with open(f"eval/{exper_str}.txt", 'w') as eval_f:
-        for i, domain in enumerate(['rest', 'lap']):
-            res = eval_ds(ds_dict=ds_dict, domain=domain, exper_str=exper_str, **kwargs)
-            all_res[domain] = res
+    
+    eval_fname = model_names[0]
+
+    if len(model_names) > 1:
+        eval_fname = eval_fname.replace(pattern_names[0], '+'.join(pattern_names))
+
+    makedirs(ROOT / 'eval', exist_ok=True)
+    with open(ROOT / "eval" / f"{eval_fname}.txt", 'w') as eval_f:
+        for i, test_domain in enumerate(test_domains):
+            res = eval_ds(ds_dict=ds_dict, model_names=model_names, test_domain=test_domain, 
+                pattern_names=pattern_names, **kwargs)
+            all_res[test_domain] = res
             p, r, f1 = [f"{100. * res['metrics'][m]:.2f}" for m in ('Precision', 'Recall', 'F1')]
 
-            print(f'Test Domain: {domain}', file=eval_f)
+            print(f'Test Domain: {test_domain}', file=eval_f)
             writer = csv.writer(eval_f, delimiter="\t")
             writer.writerows([['Metric', 'Score'],
                                 ['P', p],
@@ -240,13 +260,7 @@ def evaluate(exper_name='', post=False, **kwargs):
                                 ['F1', f1]])
             print("________________\n", file=eval_f)
 
-            if i == 1:
-                print(res['hparams'], file=eval_f)
-
-            if post:
-                # reads output files generated by eval_ds()
-                post_metrics = post_eval(ds_dict, domain, **kwargs)
-                print(f"Post-Evaluation results on '{domain}' train data:\n{post_metrics}\n")
+        print(res['hparams'], file=eval_f)
     return all_res
 
 
@@ -256,84 +270,84 @@ def apply_pattern(P1):
         return delim.join([text, P1])
     return apply
 
-def replace_mask(f, P, x, unique_count, count, replace_with):
-    unique_count += 1
-    P_x = P(x)
-    
-    for replacement in replace_with:
-        count += 1
-        line = P_x.replace('<mask>', replacement) + '\n'
-        f.write(line)
-    return unique_count, count
+def replace_mask(train_samples, path, P, none_replacement=None, limit=None, require_aspects=True):
+    count, unique_count = 0, 0
 
-def replace_mask_scoring_pattern(f, P, x, unique_count, count, replace_aspects, replace_mask):
+    with open(path, 'w') as f:
+        for x, *_, aspects in train_samples[:limit]:
+            P_x = P(x)
+
+            if aspects or not require_aspects:
+                unique_count += 1
+
+                replacements = aspects if aspects else [none_replacement]
+
+                for replacement in replacements:
+                    count += 1
+                    line = P_x.replace('<mask>', replacement) + '\n'
+                    f.write(line)
+
+    return {'unique': unique_count, 'total': count}
+
+def replace_mask_scoring_pattern(f, P, x, unique_count, count, replace_aspects, replace_mask_token):
     unique_count += 1
     P_x = P(x)
     
     for replace_asp in replace_aspects:
         count += 1
         pattern = P_x.replace('<aspect>', replace_asp)
-        line = pattern.replace('<mask>', replace_mask) + '\n'
+        line = pattern.replace('<mask>', replace_mask_token) + '\n'
         f.write(line)
     return unique_count, count    
 
-def create_mlm_train_sets(ds_dict, labelled_amount, sample_selection, **kwargs):
-    pattern_name = kwargs['pattern_names'][0] 
-    masking_strategy = kwargs['masking_strategy']
-    if masking_strategy == 'aspect_masking':  
-        P = apply_pattern(PATTERNS[pattern_name])
-    elif masking_strategy == 'aspect_scoring':  
-        P = apply_pattern(SCORING_PATTERNS[pattern_name])
+def create_mlm_train_sets(datasets, num_labelled, sample_selection, pattern_names, train_domains, **kwargs):
+    actual_num_labelled = {}
+    makedirs(ROOT / 'mlm_data', exist_ok=True)
+    masking_strategy = kwargs['masking_strategy']   
+    
+    for train_domain in train_domains:
+        for pattern_name in pattern_names:
+            if masking_strategy == 'aspect_masking':  
+                P = apply_pattern(PATTERNS[pattern_name])
+            elif masking_strategy == 'aspect_scoring':  
+                P = apply_pattern(SCORING_PATTERNS[pattern_name])
+            
+            train_samples = datasets[train_domain]['train']
+            exper_str = f"{train_domain}_{pattern_name}_{num_labelled}_{sample_selection}"
+            out_path = ROOT / 'mlm_data' / f'{exper_str}.txt'
 
-    makedirs('mlm_data', exist_ok=True)
-    actual_labelled_amounts = {}
+            args = train_samples, out_path, P
 
-    for domain in 'rest', 'lap':
-        count, unique_count = 0, 0
-        train_samples = ds_dict[domain]['train']
-        train_out_path = f'mlm_data/{domain}_train_{labelled_amount}_{pattern_name}.txt'
-
-        if masking_strategy == 'aspect_masking':
-            with open(train_out_path, 'w') as f:
+            if masking_strategy == 'aspect_masking':
                 # Use only samples with aspects
                 if sample_selection == 'take_positives':
-                    for x, *_, aspects in train_samples[:labelled_amount]:
-                        if aspects:
-                            unique_count, count = \
-                                replace_mask(f, P, x, unique_count, count, replace_with=aspects)
+                    counts = replace_mask(*args, limit=num_labelled)
 
                 # Use only samples with aspects, match required labelled amount
                 elif sample_selection == 'match_positives':
-                    for x, *_, aspects in train_samples:
-                        if aspects:
-                            unique_count, count = \
-                                replace_mask(f, P, x, unique_count, count, replace_with=aspects)
-                        if unique_count == labelled_amount:
-                            break
-                    assert unique_count == labelled_amount
+                    counts = replace_mask(*args)
 
                 # Insert 'NONE' as an aspect when there are no aspects
                 elif sample_selection == 'negatives_with_none':
-                    for x, *_, aspects in train_samples[:labelled_amount]:
-                        replace_mask(f, P, x, unique_count, count, \
-                            replace_with=aspects if aspects else ['NONE'])
+                    counts = replace_mask(*args, none_replacement='NONE', \
+                        limit=num_labelled, require_aspects=False)
 
-        if masking_strategy == 'aspect_scoring': 
-            with open(train_out_path, 'w') as f:
-                for txt, *_, gold_aspects in train_samples[:labelled_amount]:
-                            # create positive examples
-                            replace_mask_scoring_pattern(f, P, txt, unique_count, count, \
-                                replace_aspects=gold_aspects, replace_mask='Yes')
-                            # create negative examples: extract non-aspect nouns     
-                            nouns = [ent.text for ent in spacy_model(txt) if ent.pos_ == 'NOUN']
-                            non_asps = [x for x in nouns if x not in gold_aspects] 
-                            if non_asps:
+            if masking_strategy == 'aspect_scoring': 
+                with open(out_path, 'w') as f:
+                    for txt, *_, gold_aspects in train_samples[:num_labelled]:
+                                # create positive examples
                                 replace_mask_scoring_pattern(f, P, txt, unique_count, count, \
-                                    replace_aspects=non_asps, replace_mask='No')   
-                    # copy replace_mask and 
+                                    replace_aspects=gold_aspects, replace_mask='Yes')
+                                # create negative examples: extract non-aspect nouns     
+                                nouns = [ent.text for ent in spacy_model(txt) if ent.pos_ == 'NOUN']
+                                non_asps = [x for x in nouns if x not in gold_aspects] 
+                                if non_asps:
+                                    replace_mask_scoring_pattern(f, P, txt, unique_count, count, \
+                                        replace_aspects=non_asps, replace_mask='No')  
+        actual_num_labelled[train_domain] = counts                                 
+                        # copy replace_mask and 
 
-        actual_labelled_amounts[domain] = (unique_count, count)
-    return actual_labelled_amounts
+    return actual_num_labelled
 
 
 def plot_per_domain(res_dicts, hparam, values, title):
@@ -352,7 +366,7 @@ def plot_few_shot(train_domain, plot_data, train_hparams, actual_num_labelled=No
     data = []
 
     # Format Hyperparameters
-    hp_dict = plot_data[0]['lap']['hparams']
+    hp_dict = plot_data[0][train_domain]['hparams']
     hp_dict.update(train_hparams)
     hp = list(hp_dict.items())
     hparams = '<br>'.join([(', '.join([f"{k}: {v}" for k, v in hp[i: i + 9]])) for i in range(0, len(hp), 9)])
