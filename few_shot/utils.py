@@ -178,7 +178,7 @@ def run_example(text, tokens, top_k=10, thresh=-1, target=True, **kwargs):
     return preds, valid_preds, pred_bio, preds_meta, hparams
 
 
-def eval_ds(ds_dict, test_domain, pattern_names, model_names,
+def eval_ds(ds_dict, test_domain, pattern_names, model_names,scoring_model_names=None,
         scoring_patterns=None, test_limit=None, **kwargs):
 
     test_data = ds_dict[test_domain]['test'][:test_limit]
@@ -199,7 +199,7 @@ def eval_ds(ds_dict, test_domain, pattern_names, model_names,
         for text, tokens, gold_bio, aspects in tqdm(test_data):
 
             preds, preds_bio, hparams = extract_aspects(fm_pipeline=fm_pipeline,
-                text=text, tokens=tokens, model_name=model_name,\
+                text=text, tokens=tokens,\
                 pattern_names=(pattern_name,), scoring_patterns=scoring_patterns, **kwargs)
 
             all_preds.append(preds)

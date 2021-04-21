@@ -71,15 +71,17 @@ def train_scoring_pattern(labelled_amounts, **kwargs):
 def eval_pretrained():
     pattern_kwargs = dict(pattern='P5', top_k=10)
     data = load_all_datasets(train_size=200)
-    model_name='p-mlm_model_scoring_rest_100'
-    #model_name='roberta-base'
-    pattern_groups=(['P1'],['P1','P2'],['P1','P2','P3'],['P1','P2','P3','P4'],['P1','P2','P3','P4','P5'],['P1','P2','P3','P4','P5','P6'],['P1','P2','P3','P4','P5','P6','P7'],['P1','P2','P3','P4','P5','P6','P7','P8'])
+    model_names=['roberta-base']
+    scoring_model_names = ['p-mlm_model_scoring_rest_100']
+    #pattern_groups=(['P1'],['P1','P2'],['P1','P2','P3'],['P1','P2','P3','P4'],['P1','P2','P3','P4','P5'],['P1','P2','P3','P4','P5','P6'],['P1','P2','P3','P4','P5','P6','P7'],['P1','P2','P3','P4','P5','P6','P7','P8'])
     #pattern_groups=(['P1','P2'],['P1','P2','P3'])
-    #pattern_groups=(['P1'],)
+    pattern_groups=(['P1'],)
     scoring_patterns=(['P_B12'])
     for pattern_names in pattern_groups:
-        eval_results = eval_ds(data, domain='rest',model_name=model_name, pattern_names=pattern_names, scoring_patterns=scoring_patterns, exper_str='', **pattern_kwargs)
+        eval_results = eval_ds(data, test_domain='rest', pattern_names=pattern_names, model_names=model_names,scoring_model_names=scoring_model_names, 
+            scoring_patterns=scoring_patterns, **pattern_kwargs)
         print("Stats:", eval_results['metrics'], "   Patterns: ", pattern_names)
+
 
 def main():
     
