@@ -73,9 +73,9 @@ def eval_pretrained():
     data = load_all_datasets(train_size=200)
     model_names=['roberta-base']
     scoring_model_names = ['p-mlm_model_scoring_rest_100']
-    #pattern_groups=(['P1'],['P1','P2'],['P1','P2','P3'],['P1','P2','P3','P4'],['P1','P2','P3','P4','P5'],['P1','P2','P3','P4','P5','P6'],['P1','P2','P3','P4','P5','P6','P7'],['P1','P2','P3','P4','P5','P6','P7','P8'])
+    pattern_groups=(['P1','P2'], ['P1','P2','P3'], ['P1','P2','P3','P4'],['P1','P2','P3','P4','P5'],['P1','P2','P3','P4','P5','P6'],['P1','P2','P3','P4','P5','P6','P7'],['P1','P2','P3','P4','P5','P6','P7','P8'])
     #pattern_groups=(['P1','P2'],['P1','P2','P3'])
-    pattern_groups=(['P1'],)
+    #pattern_groups=(['P1'],)
     scoring_patterns=(['P_B12'])
     for pattern_names in pattern_groups:
         eval_results = eval_ds(data, test_domain='rest', pattern_names=pattern_names, model_names=model_names,scoring_model_names=scoring_model_names, 

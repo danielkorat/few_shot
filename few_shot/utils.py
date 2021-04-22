@@ -188,6 +188,8 @@ def eval_ds(ds_dict, test_domain, pattern_names, model_names,scoring_model_names
     if len(model_names) != len(pattern_names):
         model_names *= len(pattern_names)
 
+    scoring_pipeline = get_fm_pipeline(scoring_model_names[0]) if scoring_model_names else None
+  
     all_preds_list = []
     for i, (model_name, pattern_name) in enumerate(zip(model_names, pattern_names)):
 
@@ -198,7 +200,7 @@ def eval_ds(ds_dict, test_domain, pattern_names, model_names,scoring_model_names
 
         for text, tokens, gold_bio, aspects in tqdm(test_data):
 
-            preds, preds_bio, hparams = extract_aspects(fm_pipeline=fm_pipeline,
+            preds, preds_bio, hparams = extract_aspects(fm_pipeline=fm_pipeline, scoring_pipeline=scoring_pipeline,
                 text=text, tokens=tokens,\
                 pattern_names=(pattern_name,), scoring_patterns=scoring_patterns, **kwargs)
 
