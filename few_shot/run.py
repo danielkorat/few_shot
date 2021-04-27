@@ -86,13 +86,14 @@ def few_shot_experiment(num_labelled_list, train_domains, **kwargs):
 def main(smoke=False):
     few_shot_experiment(
         # pattern_names=('P1',), # 'P2', 'P3', 'P4', 'P5', 'P6'),
-        pattern_names=[f'P{i}' for i in range(1, 10)],
+        pattern_names=[f'P{i}' for i in range(1, 2)],
         # num_labelled_list=range(50, 151, 50),
         num_labelled_list=range(100, 101),
         sample_selection='negatives_with_none',
         model_names=('roberta-base',),
         train_domains=['rest'],
         test_domains=['rest'],
+        masking_strategy='aspect_masking',
         max_steps=5 if smoke else 1000,
         test_limit=5 if smoke else None
         )
@@ -101,11 +102,10 @@ if __name__ == "__main__":
 
     # main()
 
-    # main(smoke=True)
-
+    main(smoke=True)
 
     # lap_plot = 'plots/lap_plot_data_20210404-175319.pkl'
-    rest_plot = 'plots/rest_plot_data_20210426-140626.pkl'
+    # rest_plot = 'plots/rest_plot_data_20210426-140626.pkl'
 
     # plot_few_shot('lap', *pickle.load(open(lap_plot, 'rb')))
-    plot_few_shot('rest', ('rest',), *pickle.load(open(rest_plot, 'rb')))
+    # plot_few_shot('rest', ('rest',), *pickle.load(open(rest_plot, 'rb')))

@@ -303,10 +303,9 @@ def replace_mask_scoring_pattern(f, P, x, replace_aspects, replace_mask_token):
         f.write(line)
     return unique_count, count    
 
-def create_mlm_train_sets(datasets, num_labelled, sample_selection, pattern_names, train_domains, **kwargs):
+def create_mlm_train_sets(datasets, num_labelled, sample_selection, pattern_names, train_domains, masking_strategy, **kwargs):
     actual_num_labelled = {}
     makedirs(ROOT / 'mlm_data', exist_ok=True)
-    masking_strategy = kwargs['masking_strategy']   
     
     for train_domain in train_domains:
         for pattern_name in pattern_names:
