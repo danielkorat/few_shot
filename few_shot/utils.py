@@ -349,7 +349,6 @@ def create_mlm_train_sets(datasets, num_labelled, sample_selection, pattern_name
                                 replace_aspects=non_asps, replace_mask_token='No') 
 
         actual_num_labelled[train_domain] = counts                                 
-                        # copy replace_mask and 
 
     return actual_num_labelled
 

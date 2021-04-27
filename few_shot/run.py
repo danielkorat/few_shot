@@ -1,4 +1,5 @@
 from patterns import ROOT
+from modeling import RobertaForMLMWithCE
 from utils import load_all_datasets, evaluate, create_mlm_train_sets, plot_few_shot, PATTERNS
 from run_pattern_mlm import main as run_pattern_mlm
 import os
@@ -38,7 +39,9 @@ def train_mlm(train_domain, num_labelled, pattern_names, sample_selection, seed=
 
         run_pattern_mlm([
         "--seed", str(seed),
-        "--model_type", model_type, 
+        # "--model_cls", "RobertaForMLMWithCE",
+        "--model_type", model_type,
+        "--model_name_or_path", model_name,
         "--pattern", PATTERNS[pattern_name],
         # "--num_train_epochs", "1",
         "--learning_rate", str(lr),
@@ -49,8 +52,7 @@ def train_mlm(train_domain, num_labelled, pattern_names, sample_selection, seed=
         "--line_by_line", 
         "--output_dir", str(ROOT / "models" / f"{exper_str}"),
         "--do_train", "--overwrite_output_dir", 
-        "--model_name_or_path", model_name,
-        "--overwrite_cache"
+        "--overwrite_cache",
         # "--validation_file", "mlm_data/" + validation,
         # "--do_eval", "--validation_file", "mlm_data/rest_test.txt",
         # "--evaluation_strategy", "epoch",
@@ -98,12 +100,11 @@ def main(smoke=False):
         test_limit=5 if smoke else None
         )
 
+
 if __name__ == "__main__":
 
     # main()
-
     main(smoke=True)
-
     # lap_plot = 'plots/lap_plot_data_20210404-175319.pkl'
     # rest_plot = 'plots/rest_plot_data_20210426-140626.pkl'
 

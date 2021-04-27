@@ -29,6 +29,8 @@ from typing import Optional
 
 from datasets import load_dataset
 
+from modeling import STRING_TO_MODEL_CLS
+
 import transformers
 from transformers import (
     CONFIG_MAPPING,
@@ -40,6 +42,7 @@ from transformers import (
     Trainer,
     TrainingArguments,
     set_seed,
+    PreTrainedModel,
 )
 from transformers.trainer_utils import get_last_checkpoint, is_main_process
 
@@ -65,6 +68,14 @@ class ModelArguments:
     """
     Arguments pertaining to which model/config/tokenizer we are going to fine-tune, or train from scratch.
     """
+
+    model_cls: Optional[str] = field(
+        default=None,
+        metadata={
+            "help": "The pre-trained model class."
+            "Don't set if you want to train a model from scratch."
+        },
+    )
 
     model_name_or_path: Optional[str] = field(
         default=None,
@@ -289,7 +300,18 @@ def main(args):
             "You can do it from another script, save it, and load it from here, using --tokenizer_name."
         )
 
-    if model_args.model_name_or_path:
+    if model_args.model_cls:
+        model_cls = STRING_TO_MODEL_CLS[model_args.model_cls]
+        model = model_cls.from_pretrained(
+                    model_args.model_name_or_path,
+                    from_tf=bool(".ckpt" in model_args.model_name_or_path),
+                    config=config,
+                    cache_dir=model_args.cache_dir,
+                    revision=model_args.model_revision,
+                    use_auth_token=True if model_args.use_auth_token else None,
+                )
+
+    elif model_args.model_name_or_path:
         model = AutoModelForMaskedLM.from_pretrained(
             model_args.model_name_or_path,
             from_tf=bool(".ckpt" in model_args.model_name_or_path),
