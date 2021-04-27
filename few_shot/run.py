@@ -47,7 +47,7 @@ def train_mlm(train_domain, num_labelled, pattern_names, sample_selection, seed=
         "--train_file", str(ROOT / "mlm_data" / f"{exper_str}.txt"),
         "--per_device_train_batch_size", str(batch_size),
         "--line_by_line", 
-        "--output_dir", str(ROOT / "models" f"{exper_str}"),
+        "--output_dir", str(ROOT / "models" / f"{exper_str}"),
         "--do_train", "--overwrite_output_dir", 
         "--model_name_or_path", model_name,
         "--overwrite_cache"
@@ -79,7 +79,8 @@ def few_shot_experiment(num_labelled_list, train_domains, **kwargs):
             plot_data[num_labelled] = res
         with open(str(ROOT / 'plots' / f'{train_domain}_plot_data_{time.strftime("%Y%m%d-%H%M%S")}.pkl'), 'wb') as f:
             pickle.dump((plot_data, train_hparams, actual_num_labelled_list), f)
-        plot_few_shot(train_domain, plot_data, train_hparams, actual_num_labelled_list, **kwargs)
+        plot_few_shot(plot_data=plot_data, train_domain=train_domain, train_hparams=train_hparams,
+            actual_num_labelled_list=actual_num_labelled_list, **kwargs)
 
 
 def main(smoke=False):
@@ -100,11 +101,11 @@ if __name__ == "__main__":
 
     # main()
 
-    main(smoke=True)
+    # main(smoke=True)
 
 
     # lap_plot = 'plots/lap_plot_data_20210404-175319.pkl'
-    # rest_plot = 'plots/rest_plot_data_20210404-183737.pkl'
+    rest_plot = 'plots/rest_plot_data_20210426-140626.pkl'
 
     # plot_few_shot('lap', *pickle.load(open(lap_plot, 'rb')))
-    # plot_few_shot('rest', *pickle.load(open(rest_plot, 'rb')))
+    plot_few_shot('rest', ('rest',), *pickle.load(open(rest_plot, 'rb')))
