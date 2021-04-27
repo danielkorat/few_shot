@@ -29,7 +29,7 @@ def get_fm_pipeline(model_name):
 
     return fm_pipeline
 
-def extract_aspects(fm_pipeline, text, tokens, pattern_names, model_name, scoring_patterns=None,
+def extract_aspects(fm_pipeline, scoring_pipeline, text, tokens, pattern_names, scoring_patterns=None,
                             top_k=10, thresh=-1, target=True, **kwargs):
     
     hparams = locals()
@@ -44,12 +44,29 @@ def extract_aspects(fm_pipeline, text, tokens, pattern_names, model_name, scorin
         #--------- aspect scoring --------
         
         pattern = SCORING_PATTERNS[scoring_patterns[0]]
-        for pred in preds:
-            target_terms=['good', 'great', 'amazing', 'bad', 'awful', 'horrible']
-            #mask_preds = fill_mask_preds(fm_pipeline, text, target_terms, pattern, top_k, target_flag=True, aspect_token=pred)
-            mask_preds = fill_mask_preds(fm_pipeline, text, target_terms, pattern, top_k=1000, target_flag=False, aspect_token=pred)
+        valid_preds=[]
 
-            print ("mask preds: ", mask_preds)
+        for pred in preds:
+            #target_terms=['good', 'great', 'amazing', 'bad', 'awful', 'horrible']
+            #target_terms=['positive', 'negative', 'neutral', 'ok', 'none']
+            target_terms=['Yes', 'No']
+            # add leading space to targets as mask predictions function needs
+            target_terms = [' '+target for target in target_terms ]
+            mask_preds = fill_mask_preds(scoring_pipeline, text, target_terms, pattern, top_k, target_flag=True, aspect_token=pred)
+
+            #if mask_preds[0]['score']>0.02:
+            score_ratio = mask_preds[0]['score']/mask_preds[1]['score']
+            
+            if mask_preds[0]['token_str']==' Yes':
+                valid_preds.append(pred)
+            # else:
+            #     if score_ratio<1.5:
+            #         valid_preds.append(pred)
+
+                
+            #calc pred_bio again
+        preds = valid_preds    
+        pred_bio = generate_bio(tokens=tokens, preds=preds)    
     
     return preds, pred_bio, hparams
 

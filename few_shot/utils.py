@@ -15,13 +15,14 @@ from matplotlib import pyplot as plt
 import numpy as np
 import seaborn as sns
 from extract_aspects import extract_aspects, generate_bio, get_fm_pipeline
-
+import spacy
 from patterns import PATTERNS, SCORING_PATTERNS
-
 
 logging.disable(logging.WARNING)
 
 from tqdm import tqdm as tq
+
+spacy_model = spacy.load('en_core_web_sm')
 
 def tqdm(iter, **kwargs):
     return tq(list(iter), kwargs, position=0, leave=True, file=stdout)
@@ -177,7 +178,7 @@ def run_example(text, tokens, top_k=10, thresh=-1, target=True, **kwargs):
     return preds, valid_preds, pred_bio, preds_meta, hparams
 
 
-def eval_ds(ds_dict, test_domain, pattern_names, model_names,
+def eval_ds(ds_dict, test_domain, pattern_names, model_names,scoring_model_names=None,
         scoring_patterns=None, test_limit=None, **kwargs):
 
     test_data = ds_dict[test_domain]['test'][:test_limit]
@@ -187,6 +188,8 @@ def eval_ds(ds_dict, test_domain, pattern_names, model_names,
     if len(model_names) != len(pattern_names):
         model_names *= len(pattern_names)
 
+    scoring_pipeline = get_fm_pipeline(scoring_model_names[0]) if scoring_model_names else None
+  
     all_preds_list = []
     for i, (model_name, pattern_name) in enumerate(zip(model_names, pattern_names)):
 
@@ -197,8 +200,8 @@ def eval_ds(ds_dict, test_domain, pattern_names, model_names,
 
         for text, tokens, gold_bio, aspects in tqdm(test_data):
 
-            preds, preds_bio, hparams = extract_aspects(fm_pipeline=fm_pipeline,
-                text=text, tokens=tokens, model_name=model_name,\
+            preds, preds_bio, hparams = extract_aspects(fm_pipeline=fm_pipeline, scoring_pipeline=scoring_pipeline,
+                text=text, tokens=tokens,\
                 pattern_names=(pattern_name,), scoring_patterns=scoring_patterns, **kwargs)
 
             all_preds.append(preds)
@@ -288,34 +291,66 @@ def replace_mask(train_samples, path, P, none_replacement=None, limit=None, requ
 
     return {'unique': unique_count, 'total': count}
 
+def replace_mask_scoring_pattern(f, P, x, replace_aspects, replace_mask_token):
+    count, unique_count = 0, 0
+    unique_count += 1
+    P_x = P(x)
+    
+    for replace_asp in replace_aspects:
+        count += 1
+        pattern = P_x.replace('<aspect>', replace_asp)
+        line = pattern.replace('<mask>', replace_mask_token) + '\n'
+        f.write(line)
+    return unique_count, count    
+
 def create_mlm_train_sets(datasets, num_labelled, sample_selection, pattern_names, train_domains, **kwargs):
     actual_num_labelled = {}
     makedirs(ROOT / 'mlm_data', exist_ok=True)
-
+    masking_strategy = kwargs['masking_strategy']   
+    
     for train_domain in train_domains:
         for pattern_name in pattern_names:
-            P = apply_pattern(PATTERNS[pattern_name])
-
+            if masking_strategy == 'aspect_masking':  
+                P = apply_pattern(PATTERNS[pattern_name])
+            elif masking_strategy == 'aspect_scoring':  
+                P = apply_pattern(SCORING_PATTERNS[pattern_name])
+            
             train_samples = datasets[train_domain]['train']
             exper_str = f"{train_domain}_{pattern_name}_{num_labelled}_{sample_selection}"
             out_path = ROOT / 'mlm_data' / f'{exper_str}.txt'
 
             args = train_samples, out_path, P
 
-            # Use only samples with aspects
-            if sample_selection == 'take_positives':
-                counts = replace_mask(*args, limit=num_labelled)
+            if masking_strategy == 'aspect_masking':
+                # Use only samples with aspects
+                if sample_selection == 'take_positives':
+                    counts = replace_mask(*args, limit=num_labelled)
 
-            # Use only samples with aspects, match required labelled amount
-            elif sample_selection == 'match_positives':
-                counts = replace_mask(*args)
+                # Use only samples with aspects, match required labelled amount
+                elif sample_selection == 'match_positives':
+                    counts = replace_mask(*args)
 
-            # Insert 'NONE' as an aspect when there are no aspects
-            elif sample_selection == 'negatives_with_none':
-                counts = replace_mask(*args, none_replacement='NONE', \
-                    limit=num_labelled, require_aspects=False)
+                # Insert 'NONE' as an aspect when there are no aspects
+                elif sample_selection == 'negatives_with_none':
+                    counts = replace_mask(*args, none_replacement='NONE', \
+                        limit=num_labelled, require_aspects=False)
 
-        actual_num_labelled[train_domain] = counts
+            if masking_strategy == 'aspect_scoring': 
+                counts=0
+                with open(out_path, 'w') as f:
+                    for txt, *_, gold_aspects in train_samples[:num_labelled]:
+                        # create positive examples
+                        replace_mask_scoring_pattern(f, P, txt, \
+                            replace_aspects=gold_aspects, replace_mask_token='Yes')
+                        # create negative examples: extract non-aspect nouns     
+                        nouns = [ent.text for ent in spacy_model(txt) if ent.pos_ == 'NOUN']
+                        non_asps = [x for x in nouns if x not in gold_aspects] 
+                        if non_asps:
+                            replace_mask_scoring_pattern(f, P, txt, \
+                                replace_aspects=non_asps, replace_mask_token='No') 
+
+        actual_num_labelled[train_domain] = counts                                 
+                        # copy replace_mask and 
 
     return actual_num_labelled
 
