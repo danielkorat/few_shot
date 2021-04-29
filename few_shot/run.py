@@ -1,4 +1,5 @@
 from patterns import ROOT
+from modeling import RobertaForMLMWithCE
 from utils import load_all_datasets, evaluate, create_mlm_train_sets, plot_few_shot, PATTERNS
 from run_pattern_mlm import main as run_pattern_mlm
 import os
@@ -38,7 +39,9 @@ def train_mlm(train_domain, num_labelled, pattern_names, sample_selection, seed=
 
         run_pattern_mlm([
         "--seed", str(seed),
-        "--model_type", model_type, 
+        # "--model_cls", "RobertaForMLMWithCE",
+        "--model_type", model_type,
+        "--model_name_or_path", model_name,
         "--pattern", PATTERNS[pattern_name],
         # "--num_train_epochs", "1",
         "--learning_rate", str(lr),
@@ -47,10 +50,9 @@ def train_mlm(train_domain, num_labelled, pattern_names, sample_selection, seed=
         "--train_file", str(ROOT / "mlm_data" / f"{exper_str}.txt"),
         "--per_device_train_batch_size", str(batch_size),
         "--line_by_line", 
-        "--output_dir", str(ROOT / "models" f"{exper_str}"),
+        "--output_dir", str(ROOT / "models" / f"{exper_str}"),
         "--do_train", "--overwrite_output_dir", 
-        "--model_name_or_path", model_name,
-        "--overwrite_cache"
+        "--overwrite_cache",
         # "--validation_file", "mlm_data/" + validation,
         # "--do_eval", "--validation_file", "mlm_data/rest_test.txt",
         # "--evaluation_strategy", "epoch",
@@ -79,32 +81,32 @@ def few_shot_experiment(num_labelled_list, train_domains, **kwargs):
             plot_data[num_labelled] = res
         with open(str(ROOT / 'plots' / f'{train_domain}_plot_data_{time.strftime("%Y%m%d-%H%M%S")}.pkl'), 'wb') as f:
             pickle.dump((plot_data, train_hparams, actual_num_labelled_list), f)
-        plot_few_shot(train_domain, plot_data, train_hparams, actual_num_labelled_list, **kwargs)
+        plot_few_shot(plot_data=plot_data, train_domain=train_domain, train_hparams=train_hparams,
+            actual_num_labelled_list=actual_num_labelled_list, **kwargs)
 
 
 def main(smoke=False):
     few_shot_experiment(
         # pattern_names=('P1',), # 'P2', 'P3', 'P4', 'P5', 'P6'),
-        pattern_names=[f'P{i}' for i in range(1, 10)],
+        pattern_names=[f'P{i}' for i in range(1, 2)],
         # num_labelled_list=range(50, 151, 50),
         num_labelled_list=range(100, 101),
         sample_selection='negatives_with_none',
         model_names=('roberta-base',),
         train_domains=['rest'],
         test_domains=['rest'],
+        masking_strategy='aspect_masking',
         max_steps=5 if smoke else 1000,
         test_limit=5 if smoke else None
         )
 
+
 if __name__ == "__main__":
 
     # main()
-
     main(smoke=True)
-
-
     # lap_plot = 'plots/lap_plot_data_20210404-175319.pkl'
-    # rest_plot = 'plots/rest_plot_data_20210404-183737.pkl'
+    # rest_plot = 'plots/rest_plot_data_20210426-140626.pkl'
 
     # plot_few_shot('lap', *pickle.load(open(lap_plot, 'rb')))
-    # plot_few_shot('rest', *pickle.load(open(rest_plot, 'rb')))
+    # plot_few_shot('rest', ('rest',), *pickle.load(open(rest_plot, 'rb')))

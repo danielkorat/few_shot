@@ -303,10 +303,9 @@ def replace_mask_scoring_pattern(f, P, x, replace_aspects, replace_mask_token):
         f.write(line)
     return unique_count, count    
 
-def create_mlm_train_sets(datasets, num_labelled, sample_selection, pattern_names, train_domains, **kwargs):
+def create_mlm_train_sets(datasets, num_labelled, sample_selection, pattern_names, train_domains, masking_strategy, **kwargs):
     actual_num_labelled = {}
     makedirs(ROOT / 'mlm_data', exist_ok=True)
-    masking_strategy = kwargs['masking_strategy']   
     
     for train_domain in train_domains:
         for pattern_name in pattern_names:
@@ -350,7 +349,6 @@ def create_mlm_train_sets(datasets, num_labelled, sample_selection, pattern_name
                                 replace_aspects=non_asps, replace_mask_token='No') 
 
         actual_num_labelled[train_domain] = counts                                 
-                        # copy replace_mask and 
 
     return actual_num_labelled
 
@@ -367,7 +365,7 @@ def plot_per_domain(res_dicts, hparam, values, title):
         sns.lineplot(data=df, ax=axs[i]).set_title(DOMAIN_NAMES[domain])
 
 
-def plot_few_shot(train_domain, plot_data, train_hparams, actual_num_labelled=None, **kwargs):
+def plot_few_shot(train_domain, test_domains, plot_data, train_hparams={}, actual_num_labelled=None, **kwargs):
     data = []
 
     # Format Hyperparameters
@@ -378,7 +376,7 @@ def plot_few_shot(train_domain, plot_data, train_hparams, actual_num_labelled=No
     if actual_num_labelled:
         hparams += ', actual_num_labelled: ' + str(actual_num_labelled)
 
-    for test_domain in kwargs['test_domains']:
+    for test_domain in test_domains:
         for num_labelled, res_dict in plot_data.items():
             for metric, score in res_dict[test_domain]['metrics'].items():
                 data.append({
