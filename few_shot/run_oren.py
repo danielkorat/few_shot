@@ -24,7 +24,7 @@ def train_mlm(train_domain, num_labelled, pattern_name, seed=42, lr=1e-05, max_s
 
     os.makedirs('models', exist_ok=True)
     if pattern_name.startswith('P_B'):
-        output_dir = f"models/p-mlm_model_scoring_{train_domain}_{num_labelled}"
+        output_dir = f"models/p-mlm_model_scoring_{pattern_name}_{train_domain}_{num_labelled}"
     else:
         output_dir = f"models/p-mlm_model_{train_domain}_{num_labelled}"
     # hparams used in PET: 
@@ -69,16 +69,19 @@ def train_scoring_pattern(labelled_amounts, **kwargs):
             print("Finished model training")
 
 def eval_pretrained():
-    pattern_kwargs = dict(pattern='P5', top_k=10)
+    pattern_kwargs = dict(pattern='P5', top_k=10, step_1_nouns_only=True)
     data = load_all_datasets(train_size=200)
     model_names=['roberta-base']
-    scoring_model_names = ['p-mlm_model_scoring_rest_100']
-    pattern_groups=(['P1','P2'], ['P1','P2','P3'], ['P1','P2','P3','P4'],['P1','P2','P3','P4','P5'],['P1','P2','P3','P4','P5','P6'],['P1','P2','P3','P4','P5','P6','P7'],['P1','P2','P3','P4','P5','P6','P7','P8'])
+    #scoring_model_names = ['p-mlm_model_scoring_P_B12_rest_100']
+    #scoring_model_names = ['p-mlm_model_scoring_P_B12_lap_100']
+    scoring_model_names = None
+    #pattern_groups=(['P1','P2'], ['P1','P2','P3'], ['P1','P2','P3','P4'],['P1','P2','P3','P4','P5'],['P1','P2','P3','P4','P5','P6'],['P1','P2','P3','P4','P5','P6','P7'],['P1','P2','P3','P4','P5','P6','P7','P8'])
     #pattern_groups=(['P1','P2'],['P1','P2','P3'])
-    #pattern_groups=(['P1'],)
-    scoring_patterns=(['P_B12'])
+    pattern_groups=(['P1'],)
+    #scoring_patterns=(['P_B12'])
+    scoring_patterns=None
     for pattern_names in pattern_groups:
-        eval_results = eval_ds(data, test_domain='rest', pattern_names=pattern_names, model_names=model_names,scoring_model_names=scoring_model_names, 
+        eval_results = eval_ds(data, test_domain='lap', pattern_names=pattern_names, model_names=model_names,scoring_model_names=scoring_model_names, 
             scoring_patterns=scoring_patterns, **pattern_kwargs)
         print("Stats:", eval_results['metrics'], "   Patterns: ", pattern_names)
 
@@ -88,9 +91,9 @@ def main():
     eval_pretrained()
    
 
-    # train_scoring_pattern(pattern_names=('P_B12',), labelled_amounts=range(100, 101), sample_selection='negatives_with_none',
-    #     model_name='roberta-base', train_domains=['rest'], test_domains=['rest'],
-    #     masking_strategy='aspect_scoring')#, max_steps=5, test_limit=5)    
+    #  train_scoring_pattern(pattern_names=('P_B12',), labelled_amounts=range(100, 101), sample_selection='negatives_with_none',
+    #      model_name='roberta-base', train_domains=['lap'], test_domains=['lap'],
+    #      masking_strategy='aspect_scoring')#, max_steps=5, test_limit=5)    
 
 if __name__ == "__main__":
     main()
