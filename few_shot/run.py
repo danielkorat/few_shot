@@ -30,7 +30,7 @@ def train_mlm(train_domain, num_labelled, pattern_names, sample_selection, seed=
     # hparams used in PET: 
     # lr", "1x10^-5, batch_size", "16, max_len", "256, steps", "1000
     # every batch: 4 labelled + 12 unlabelled
-    # os.environ["CUDA_VISIBLE_DEVICES"] = "0"
+    os.environ["CUDA_VISIBLE_DEVICES"] = "-1"
 
     for pattern_name in pattern_names:
         print(f"Running train_mlm() for pattern {pattern_name}...")
@@ -39,7 +39,7 @@ def train_mlm(train_domain, num_labelled, pattern_names, sample_selection, seed=
 
         run_pattern_mlm([
         "--seed", str(seed),
-        # "--model_cls", "RobertaForMLMWithCE",
+        "--model_cls", "RobertaForMLMWithCE",
         "--model_type", model_type,
         "--model_name_or_path", model_name,
         "--pattern", PATTERNS[pattern_name],
@@ -49,7 +49,6 @@ def train_mlm(train_domain, num_labelled, pattern_names, sample_selection, seed=
         "--max_steps", str(max_steps),
         "--train_file", str(ROOT / "mlm_data" / f"{exper_str}.txt"),
         "--per_device_train_batch_size", str(batch_size),
-        "--line_by_line", 
         "--output_dir", str(ROOT / "models" / f"{exper_str}"),
         "--do_train", "--overwrite_output_dir", 
         "--overwrite_cache",
@@ -69,11 +68,11 @@ def train_eval(train_domain, num_labelled, **kwargs):
 
 def few_shot_experiment(num_labelled_list, train_domains, **kwargs):
     actual_num_labelled_list = pattern_mlm_preprocess(num_labelled_list, train_domains, **kwargs)
-    pretrained_res = evaluate(**kwargs)
+    # pretrained_res = evaluate(**kwargs)
     for train_domain in train_domains:
         print(f"Running few_shot_experiment() for train domain {train_domain}...")
         print(f"\n{'=' * 50}\n\t\t  Train Domain: {train_domain}\n{'=' * 50}")
-        plot_data = {0: pretrained_res}
+        plot_data = {}#{0: pretrained_res}
         for num_labelled in num_labelled_list:
             print(f"Running num_labelled {num_labelled}...")
             print(f"\n{'-' * 50}\n\t\t  Num. Labelled: {num_labelled}\n{'-' * 50}")
@@ -97,7 +96,8 @@ def main(smoke=False):
         test_domains=['rest'],
         masking_strategy='aspect_masking',
         max_steps=5 if smoke else 1000,
-        test_limit=5 if smoke else None
+        test_limit=5 if smoke else None,
+        # train_limit=50 if smoke else None
         )
 
 
