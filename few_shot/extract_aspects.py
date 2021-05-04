@@ -30,16 +30,19 @@ def get_fm_pipeline(model_name):
     return fm_pipeline
 
 def extract_aspects(fm_pipeline, scoring_pipeline, text, tokens, pattern_names, scoring_patterns=None,
-                            top_k=10, thresh=-1, target=True, **kwargs):
+                            top_k=10, thresh=-1, target=True, step_1_nouns_only=False, **kwargs):
     
     hparams = locals()
     for v in 'text', 'tokens', 'kwargs', 'fm_pipeline':
         hparams.pop(v)
     hparams.update(kwargs)
     
-    preds, pred_bio = extract_candidate_aspects(fm_pipeline, text, tokens, pattern_names,
-                                                top_k, thresh, target_flag=True, **kwargs)
-
+    if not step_1_nouns_only:
+        preds, pred_bio = extract_candidate_aspects(fm_pipeline, text, tokens, pattern_names,
+                                                    top_k, thresh, target_flag=True, **kwargs)
+    else:    
+        preds, pred_bio = extract_candidate_aspects_as_nouns(text, tokens)
+    
     if scoring_patterns:
         #--------- aspect scoring --------
         
@@ -102,6 +105,13 @@ def extract_candidate_aspects(fm_pipeline, text, tokens, pattern_names,
 
     return preds, pred_bio
 
+def extract_candidate_aspects_as_nouns(text, tokens):
+
+    nouns = [ent.text for ent in spacy_model(text) if ent.pos_ == 'NOUN']
+    preds = nouns
+    pred_bio = generate_bio(tokens=tokens, preds=preds)
+
+    return preds, pred_bio
 
 def fill_mask_preds(fm_pipeline, text, target_terms, pattern, top_k, target_flag, aspect_token=None):
     delim = ' ' if text[-1] in ('.', '!', '?') else '. '
@@ -181,9 +191,12 @@ def merge_mask_preds(mask_preds_all, strategy='union'):
 def generate_bio(tokens, preds):     
     idx_all =[]
     for pred in preds:
-        idx = tokens.index(pred) 
-        idx_all.append(idx)
-
+        try:
+            idx = tokens.index(pred) 
+            idx_all.append(idx)
+        except ValueError:
+            pass
+    
     pred_bio = ['B-ASP' if i in idx_all else 'O' for i in range(len(tokens))]
 
     return pred_bio
