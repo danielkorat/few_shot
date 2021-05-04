@@ -1,6 +1,6 @@
-from patterns import ROOT
+from patterns import ROOT, PATTERNS, SCORING_PATTERNS
 from modeling import RobertaForMLMWithCE
-from utils import load_all_datasets, evaluate, create_mlm_train_sets, plot_few_shot, PATTERNS
+from utils import load_all_datasets, evaluate, create_mlm_train_sets, plot_few_shot
 from run_pattern_mlm import main as run_pattern_mlm
 import os
 import pickle
@@ -37,12 +37,17 @@ def train_mlm(train_domain, num_labelled, pattern_names, sample_selection, seed=
         exper_str = f"{train_domain}_{pattern_name}_{num_labelled}_{sample_selection}"
         trained_model_names.append(exper_str)
 
+        if pattern_name.startswith('P_B'):
+            pattern = SCORING_PATTERNS[pattern_name]
+        else:
+            pattern = PATTERNS[pattern_name]
+
         run_pattern_mlm([
         "--seed", str(seed),
-        "--model_cls", "RobertaForMLMWithCE",
+        # "--model_cls", "RobertaForMLMWithCE",
         "--model_type", model_type,
         "--model_name_or_path", model_name,
-        "--pattern", PATTERNS[pattern_name],
+        "--pattern", pattern,
         # "--num_train_epochs", "1",
         "--learning_rate", str(lr),
         "--max_seq_length", str(max_seq),

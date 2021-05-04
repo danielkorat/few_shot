@@ -74,7 +74,7 @@ class RobertaForMLMWithCE(RobertaForMaskedLM):
             logits=prediction_scores,
             hidden_states=outputs.hidden_states,
             attentions=outputs.attentions,
-        )    
+        )
 
 STRING_TO_MODEL_CLS = {'RobertaForMLMWithCE': RobertaForMLMWithCE}
 
