@@ -44,29 +44,30 @@ def extract_aspects(fm_pipeline, scoring_pipeline, text, tokens, pattern_names, 
         preds, pred_bio = extract_candidate_aspects_as_nouns(text, tokens)
     
     if scoring_patterns:
+        candidates = preds
         #--------- aspect scoring --------
         
         pattern = SCORING_PATTERNS[scoring_patterns[0]]
         valid_preds=[]
 
-        for pred in preds:
+        for candidate in candidates:
             #target_terms=['good', 'great', 'amazing', 'bad', 'awful', 'horrible']
             #target_terms=['positive', 'negative', 'neutral', 'ok', 'none']
             target_terms=['Yes', 'No']
             # add leading space to targets as mask predictions function needs
-            target_terms = [' '+target for target in target_terms ]
-            mask_preds = fill_mask_preds(scoring_pipeline, text, target_terms, pattern, top_k, target_flag=True, aspect_token=pred)
+            target_terms = [' ' + target for target in target_terms ]
+            mask_preds = fill_mask_preds(scoring_pipeline, text, target_terms, pattern,\
+                top_k, target_flag=True, aspect_token=candidate)
 
             #if mask_preds[0]['score']>0.02:
-            score_ratio = mask_preds[0]['score']/mask_preds[1]['score']
+            score_ratio = mask_preds[0]['score'] / mask_preds[1]['score']
             
-            if mask_preds[0]['token_str']==' Yes':
-                valid_preds.append(pred)
+            if mask_preds[0]['token_str'] == ' Yes':
+                valid_preds.append(candidate)
             # else:
             #     if score_ratio<1.5:
             #         valid_preds.append(pred)
 
-                
             #calc pred_bio again
         preds = valid_preds    
         pred_bio = generate_bio(tokens=tokens, preds=preds)    

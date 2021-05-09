@@ -25,6 +25,7 @@ class RobertaForMLMWithCE(RobertaForMaskedLM):
         output_hidden_states=None,
         return_dict=None,
         mlm_labels=None,
+        is_aspect=None
     ):
         r"""
         labels (:obj:`torch.LongTensor` of shape :obj:`(batch_size, sequence_length)`, `optional`):
@@ -52,25 +53,26 @@ class RobertaForMLMWithCE(RobertaForMaskedLM):
         sequence_output = outputs[0]
         prediction_scores = self.lm_head(sequence_output)
 
-        # MLM LOSS
-        lm_loss = None
-        loss_fct = CrossEntropyLoss()
-        lm_loss = loss_fct(prediction_scores.view(-1, self.config.vocab_size), labels.view(-1))
+        cross_entropy = CrossEntropyLoss()
 
         # LABEL LOSS
-        label_prediction_scores = self.pvp.mlm_logits_to_cls_logits(mlm_labels, prediction_scores) # or outputs[0]?
-        label_loss = loss_fct(label_prediction_scores.view(-1, len(self.config.label_list)), labels.view(-1))
+        len_label_list = 2
+        label_prediction_scores = self.pvp.mlm_logits_to_cls_logits(mlm_labels, prediction_scores)
+        label_loss = cross_entropy(label_prediction_scores.view(-1, len_label_list), is_aspect.view(-1))
+
+        # MLM LOSS
+        masked_lm_loss = cross_entropy(prediction_scores.view(-1, self.config.vocab_size), labels.view(-1))
 
         # FINAL LOSS
         alpha = 1e-4
-        loss = alpha * label_loss + (1 - alpha) * lm_loss
+        loss = (1 - alpha) * label_loss + alpha * masked_lm_loss
 
         if not return_dict:
             output = (prediction_scores,) + outputs[2:]
             return ((loss,) + output) if loss is not None else output
 
         return MaskedLMOutput(
-            loss=loss,
+            loss=label_loss,
             logits=prediction_scores,
             hidden_states=outputs.hidden_states,
             attentions=outputs.attentions,
@@ -78,72 +80,78 @@ class RobertaForMLMWithCE(RobertaForMaskedLM):
 
 STRING_TO_MODEL_CLS = {'RobertaForMLMWithCE': RobertaForMLMWithCE}
 
-@dataclass
-class DataCollatorForPatternLanguageModeling(DataCollatorForLanguageModeling):
-
-    pattern: str = None
-
-    def __post_init__(self):
-        pattern_tokens = self.tokenizer.tokenize(self.pattern)
-        idx = pattern_tokens.index(' ' + self.tokenizer.mask_token)
-        self.pattern_mask_idx = idx - len(pattern_tokens)
-
-    def mask_tokens(
-        self, inputs: torch.Tensor, special_tokens_mask: Optional[torch.Tensor] = None
-    ) -> Tuple[torch.Tensor, torch.Tensor]:
-        """
-        Prepare masked tokens inputs/labels for masked language modeling: 80% MASK, 10% random, 10% original.
-        """
-        labels = inputs.clone()
-        # We sample a few tokens in each sequence for MLM training (with probability `self.mlm_probability`)
-        probability_matrix = torch.full(labels.shape, self.mlm_probability)
-        if special_tokens_mask is None:
-            special_tokens_mask = [
-                self.tokenizer.get_special_tokens_mask(val, already_has_special_tokens=True) for val in labels.tolist()
-            ]
-            special_tokens_mask = torch.tensor(special_tokens_mask, dtype=torch.bool)
-        else:
-            special_tokens_mask = special_tokens_mask.bool()
-
-        probability_matrix.masked_fill_(special_tokens_mask, value=0.0)
-
-        # Pattern MLM: set pattern-mask token masking probability to 1.0:
-        for label_vector, prob_vector in zip(labels.tolist(), probability_matrix):
-            mask_idx = (label_vector + [1]).index(1) + self.pattern_mask_idx - 1
-            prob_vector[mask_idx] = 1.0
-
-        masked_indices = torch.bernoulli(probability_matrix).bool()
-        labels[~masked_indices] = -100  # We only compute loss on masked tokens
-
-        # 80% of the time, we replace masked input tokens with tokenizer.mask_token ([MASK])
-        indices_replaced = torch.bernoulli(torch.full(labels.shape, 0.8)).bool() & masked_indices
-        inputs[indices_replaced] = self.tokenizer.convert_tokens_to_ids(self.tokenizer.mask_token)
-
-        # 10% of the time, we replace masked input tokens with random word
-        indices_random = torch.bernoulli(torch.full(labels.shape, 0.5)).bool() & masked_indices & ~indices_replaced
-        random_words = torch.randint(len(self.tokenizer), labels.shape, dtype=torch.long)
-        inputs[indices_random] = random_words[indices_random]
-
-        # The rest of the time (10% of the time) we keep the masked input tokens unchanged
-        return inputs, labels
-
 
 class BooleanPVP:
     VERBALIZER = {
         "1": ["Yes"],
-        "2": ["No"]
+        "0": ["No"]
     }
 
-    def __init__(self, tokenizer) -> None:
+    def get_parts(self, example, word):
+        text = self.shortenable(example)
+        pattern = "Is there sentiment towards <aspect> in the previous sentence?"
+        pattern = pattern.replace("<aspect>", word)
+        return [text, pattern, self.mask, '.']
+
+    def __init__(self, tokenizer, max_seq_length) -> None:
         self.label_list = BooleanPVP.VERBALIZER.keys()
+        self.max_seq_length = max_seq_length
         self.max_num_verbalizers = 1
         self.tokenizer = tokenizer
         self.mlm_logits_to_cls_logits_tensor = self._build_mlm_logits_to_cls_logits_tensor()
 
     @property
+    def mask(self) -> str:
+        """Return the underlying LM's mask token"""
+        return self.tokenizer.mask_token
+
+    @property
     def mask_id(self) -> int:
         """Return the underlying LM's mask id"""
         return self.tokenizer.mask_token_id
+
+    @staticmethod
+    def _seq_length(parts: List[Tuple[str, bool]], only_shortenable: bool = False):
+        return sum([len(x) for x, shortenable in parts if not only_shortenable or shortenable]) if parts else 0
+
+    @staticmethod
+    def _remove_last(parts: List[Tuple[str, bool]]):
+        last_idx = max(idx for idx, (seq, shortenable) in enumerate(parts) if shortenable and seq)
+        parts[last_idx] = (parts[last_idx][0][:-1], parts[last_idx][1])
+
+    @staticmethod
+    def shortenable(s):
+        """Return an instance of this string that is marked as shortenable"""
+        return s, True
+
+    def encode(self, text: str, word: str):
+        """
+        Encode an input example using this pattern-verbalizer pair.
+
+        :param text: the input example to encode
+        :return: A tuple, consisting of a list of input ids and a list of token type ids
+        """
+
+        parts = self.get_parts(text, word)
+        kwargs = {} #{'add_prefix_space': True}
+        parts = [x if isinstance(x, tuple) else (x, False) for x in parts]
+        parts = [(self.tokenizer.encode(x, add_special_tokens=False, **kwargs), s) for x, s in parts if x]
+        self.truncate(parts, max_length=self.max_seq_length)
+        tokens = [token_id for part, _ in parts for token_id in part]
+        input_ids = self.tokenizer.build_inputs_with_special_tokens(tokens, None)
+        token_type_ids = self.tokenizer.create_token_type_ids_from_sequences(tokens, None)
+        return input_ids, token_type_ids
+
+    def truncate(self, parts, max_length: int):
+        """Truncate text to a predefined total maximum length"""
+        total_len = self._seq_length(parts) + self.tokenizer.num_special_tokens_to_add(False)
+        num_tokens_to_remove = total_len - max_length
+
+        if num_tokens_to_remove <= 0:
+            return parts
+
+        for _ in range(num_tokens_to_remove):
+            self._remove_last(parts)
 
     def get_mask_positions(self, input_ids):
         label_idx = input_ids.index(self.mask_id)
@@ -168,19 +176,23 @@ class BooleanPVP:
 
     def mlm_logits_to_cls_logits(self, mlm_labels: torch.Tensor, logits: torch.Tensor) -> torch.Tensor:
         masked_logits = logits[mlm_labels >= 0]
-        cls_logits = torch.stack([self._single_mlm_logits_to_cls_logits(ml) for ml in masked_logits])
+        cls_logits = torch.stack([self._convert_single_mlm_logits_to_cls_logits(ml) for ml in masked_logits])
         return cls_logits
 
-    def _single_mlm_logits_to_cls_logits(self, logits: torch.Tensor) -> torch.Tensor:
+    def _convert_single_mlm_logits_to_cls_logits(self, logits: torch.Tensor) -> torch.Tensor:
         m2c = self.mlm_logits_to_cls_logits_tensor.to(logits.device)
         # filler_len.shape() == max_fillers
-        filler_len = torch.tensor([len(self.verbalize(label)) for label in self.wrapper.config.label_list],
+        filler_len = torch.tensor([len(self.verbalize(label)) for label in self.label_list],
                                   dtype=torch.float)
         filler_len = filler_len.to(logits.device)
 
         # cls_logits.shape() == num_labels x max_fillers  (and 0 when there are not as many fillers).
         cls_logits = logits[torch.max(torch.zeros_like(m2c), m2c)]
         cls_logits = cls_logits * (m2c > 0).float()
+
+        # cls_logits.shape() == num_labels
+        cls_logits = cls_logits.sum(axis=1) / filler_len
+        return cls_logits
 
 
 def get_verbalization_ids(word: str, tokenizer, force_single_token: bool):
@@ -194,7 +206,7 @@ def get_verbalization_ids(word: str, tokenizer, force_single_token: bool):
            corresponds to multiple tokens.
     :return: either the list of token ids or the single token id corresponding to this word
     """
-    kwargs = {'add_prefix_space': True} if isinstance(tokenizer, GPT2TokenizerFast) else {}
+    kwargs = {} #{'add_prefix_space': True} if isinstance(tokenizer, GPT2TokenizerFast) else {}
     ids = tokenizer.encode(word, add_special_tokens=False, **kwargs)
     if not force_single_token:
         return ids

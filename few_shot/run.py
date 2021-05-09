@@ -19,7 +19,8 @@ def pattern_mlm_preprocess(num_labelled_list, train_domains, sample_selection, *
         res[num_labelled] = amounts
     return res
 
-def train_mlm(train_domain, num_labelled, pattern_names, sample_selection, seed=42, lr=1e-05, max_seq=256, max_steps=1000, batch_size=16,
+def train_mlm(train_domain, num_labelled, pattern_names, sample_selection, masking_strategy,
+            seed=42, lr=1e-05, max_seq=256, max_steps=1000, batch_size=12,
             validation=None, model_type='roberta', model_name='roberta-base', **kwargs):
     hparams = locals()
     for v in 'train_domain', 'num_labelled', 'kwargs':
@@ -30,11 +31,11 @@ def train_mlm(train_domain, num_labelled, pattern_names, sample_selection, seed=
     # hparams used in PET: 
     # lr", "1x10^-5, batch_size", "16, max_len", "256, steps", "1000
     # every batch: 4 labelled + 12 unlabelled
-    os.environ["CUDA_VISIBLE_DEVICES"] = "-1"
+    # os.environ["CUDA_VISIBLE_DEVICES"] = "-1"
 
     for pattern_name in pattern_names:
         print(f"Running train_mlm() for pattern {pattern_name}...")
-        exper_str = f"{train_domain}_{pattern_name}_{num_labelled}_{sample_selection}"
+        exper_str = f"{train_domain}_{num_labelled}_{masking_strategy}"
         trained_model_names.append(exper_str)
 
         if pattern_name.startswith('P_B'):
@@ -52,13 +53,13 @@ def train_mlm(train_domain, num_labelled, pattern_names, sample_selection, seed=
         "--learning_rate", str(lr),
         "--max_seq_length", str(max_seq),
         "--max_steps", str(max_steps),
-        "--train_file", str(ROOT / "mlm_data" / f"{exper_str}.txt"),
+        "--train_file", str(ROOT / "mlm_data" / f"{exper_str}.csv"),
         "--per_device_train_batch_size", str(batch_size),
         "--output_dir", str(ROOT / "models" / f"{exper_str}"),
         "--do_train", "--overwrite_output_dir", 
         "--overwrite_cache",
         # "--validation_file", "mlm_data/" + validation,
-        # "--do_eval", "--validation_file", "mlm_data/rest_test.txt",
+        # "--do_eval", "--validation_file", "mlm_data/rest_test.csv",
         # "--evaluation_strategy", "epoch",
         ])
 

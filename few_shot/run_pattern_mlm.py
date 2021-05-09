@@ -42,11 +42,11 @@ from transformers import (
     Trainer,
     TrainingArguments,
     set_seed,
-    PreTrainedModel,
+    DataCollatorForLanguageModeling,
 )
 from transformers.trainer_utils import get_last_checkpoint, is_main_process
 
-from modeling import DataCollatorForPatternLanguageModeling
+# from modeling import DataCollatorForPatternLanguageModeling
 
 logger = logging.getLogger(__name__)
 MODEL_CONFIG_CLASSES = list(MODEL_FOR_MASKED_LM_MAPPING.keys())
@@ -142,7 +142,7 @@ class DataTrainingArguments:
         },
     )
     max_seq_length: Optional[int] = field(
-        default=None,
+        default=512,
         metadata={
             "help": "The maximum total input sequence length after tokenization. Sequences longer "
             "than this will be truncated."
@@ -241,9 +241,7 @@ def main(args):
     if data_args.validation_file is not None:
         data_files["validation"] = data_args.validation_file
     extension = data_args.train_file.split(".")[-1]
-    if extension == "txt":
-        extension = "text"
-    datasets = load_dataset(extension, data_files=data_files)
+    datasets = load_dataset(extension, data_files=data_files, delimiter='\t')
 
     config_kwargs = {
         "cache_dir": model_args.cache_dir,
@@ -274,7 +272,7 @@ def main(args):
             "You can do it from another script, save it, and load it from here, using --tokenizer_name."
         )
 
-    pvp = BooleanPVP(tokenizer)
+    pvp = BooleanPVP(tokenizer, data_args.max_seq_length)
     
     if model_args.model_cls:
         model_cls = STRING_TO_MODEL_CLS[model_args.model_cls]
@@ -303,55 +301,54 @@ def main(args):
 
     model.resize_token_embeddings(len(tokenizer))
 
-    # Preprocessing the datasets.
-    # First we tokenize all the texts.
-    if training_args.do_train:
-        column_names = datasets["train"].column_names
-    else:
-        column_names = datasets["validation"].column_names
-    text_column_name = "text" if "text" in column_names else column_names[0]
-
-    padding = "max_length" if data_args.pad_to_max_length else False
-
-    def tokenize_function(examples):
+    # Preprocessing the datasets: add mlm_labels
+    def pattern_mlm_preprocess(examples):
         # Remove empty lines
         examples["text"] = [line for line in examples["text"] if len(line) > 0 and not line.isspace()]
-        tokenized = tokenizer(
-            examples["text"],
-            padding=padding,
-            truncation=True,
-            max_length=data_args.max_seq_length,
-            # We use this option because DataCollatorForLanguageModeling (see below) is more efficient when it
-            # receives the `special_tokens_mask`.
-            return_special_tokens_mask=True,
-        )
+        examples['input_ids'], examples['token_type_ids'], examples['attention_mask'],\
+            examples['mlm_labels'] = [], [], [], []
+        
+        for word, text in zip(examples['word'], examples['text']):
 
-        return tokenized
+            input_ids, token_type_ids = pvp.encode(text, word)
 
-    tokenized_datasets = datasets.map(
-        tokenize_function,
+            attention_mask = [1] * len(input_ids)
+            padding_length = data_args.max_seq_length - len(input_ids)
+
+            if padding_length < 0:
+                raise ValueError(f"Maximum sequence length is too small, got {len(input_ids)} input ids")
+                assert False
+
+            input_ids = input_ids + ([tokenizer.pad_token_id] * padding_length)
+            attention_mask = attention_mask + ([0] * padding_length)
+            token_type_ids = token_type_ids + ([0] * padding_length)
+
+            assert len(input_ids) == data_args.max_seq_length
+            assert len(attention_mask) == data_args.max_seq_length
+            assert len(token_type_ids) == data_args.max_seq_length
+
+            mlm_labels = pvp.get_mask_positions(input_ids)
+            
+            examples['input_ids'].append(input_ids)
+            examples['token_type_ids'].append(token_type_ids)
+            examples['attention_mask'].append(attention_mask)
+            examples['mlm_labels'].append(mlm_labels)
+
+        assert len({len(e) for e in examples.values()}) == 1
+        return examples
+
+    preprocessed_datasets = datasets.map(
+        pattern_mlm_preprocess,
         batched=True,
         num_proc=data_args.preprocessing_num_workers,
-        remove_columns=[text_column_name],
+        remove_columns=['text', 'word'],
         load_from_cache_file=not data_args.overwrite_cache,
     )
 
-    def add_mlm_labels(example):
-        mlm_labels = pvp.get_mask_positions(example['input_ids'])
-
-        # if self.wrapper.config.model_type == 'gpt2':
-        #     # shift labels to the left by one
-        #     mlm_labels.append(mlm_labels.pop(0))
-
-        example['mlm_labels'] = mlm_labels
-        return example
-
-    preprocessed_datasets = tokenized_datasets.map(add_mlm_labels)
-
     # Data collator
     # This one will take care of randomly masking the tokens.
-    data_collator = DataCollatorForPatternLanguageModeling(
-        pattern=pattern_args.pattern,
+    data_collator = DataCollatorForLanguageModeling(
+        # pattern=pattern_args.pattern,
         tokenizer=tokenizer, 
         mlm_probability=data_args.mlm_probability)
 
@@ -403,12 +400,6 @@ def main(args):
                     logger.info(f"  {key} = {value}")
                     writer.write(f"{key} = {value}\n")
     return results
-
-
-def _mp_fn(index):
-    # For xla_spawn (TPUs)
-    main()
-
 
 if __name__ == "__main__":
     main(sys.argv)

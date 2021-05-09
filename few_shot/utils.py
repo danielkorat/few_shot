@@ -1,9 +1,6 @@
 from patterns import ROOT
-from os import makedirs
+from os import makedirs, write
 import os
-from numpy.core.fromnumeric import nonzero
-from numpy.lib.shape_base import hsplit
-from transformers import pipeline
 from seqeval.metrics import f1_score, precision_score, recall_score,\
                             performance_measure
 import csv, json, pickle, spacy, requests, logging
@@ -22,6 +19,7 @@ logging.disable(logging.WARNING)
 
 from tqdm import tqdm as tq
 
+print("LOADING SPACY MODEL ----------------------")
 spacy_model = spacy.load('en_core_web_sm')
 
 def tqdm(iter, **kwargs):
@@ -178,7 +176,7 @@ def run_example(text, tokens, top_k=10, thresh=-1, target=True, **kwargs):
     return preds, valid_preds, pred_bio, preds_meta, hparams
 
 
-def eval_ds(ds_dict, test_domain, pattern_names, model_names,scoring_model_names=None,
+def eval_ds(ds_dict, test_domain, pattern_names, model_names, scoring_model_names=None,
         scoring_patterns=None, test_limit=None, **kwargs):
 
     test_data = ds_dict[test_domain]['test'][:test_limit]
@@ -193,7 +191,7 @@ def eval_ds(ds_dict, test_domain, pattern_names, model_names,scoring_model_names
     all_preds_list = []
     for i, (model_name, pattern_name) in enumerate(zip(model_names, pattern_names)):
 
-        print(f"Evaluating ({model_name}, {pattern_name})")
+        print(f"Evaluating ({model_name}, {pattern_name})" + f"with scoring model {scoring_model_names[0]}" if scoring_model_names else "")
         fm_pipeline = get_fm_pipeline(model_name)
 
         all_preds_bio, all_preds = [], []
@@ -201,8 +199,7 @@ def eval_ds(ds_dict, test_domain, pattern_names, model_names,scoring_model_names
         for text, tokens, gold_bio, aspects in tqdm(test_data):
 
             preds, preds_bio, hparams = extract_aspects(fm_pipeline=fm_pipeline, scoring_pipeline=scoring_pipeline,
-                text=text, tokens=tokens,\
-                pattern_names=(pattern_name,), scoring_patterns=scoring_patterns, **kwargs)
+                text=text, tokens=tokens, pattern_names=(pattern_name,), scoring_patterns=scoring_patterns, **kwargs)
 
             all_preds.append(preds)
             all_preds_bio.append(preds_bio)
@@ -303,50 +300,39 @@ def replace_mask_scoring_pattern(f, P, x, replace_aspects, replace_mask_token):
         f.write(line)
     return unique_count, count    
 
-def create_mlm_train_sets(datasets, num_labelled, sample_selection, pattern_names, train_domains, masking_strategy, **kwargs):
+def create_mlm_train_sets(datasets, num_labelled, train_domains, masking_strategy, **kwargs):
     actual_num_labelled = {}
     makedirs(ROOT / 'mlm_data', exist_ok=True)
     
     for train_domain in train_domains:
-        for pattern_name in pattern_names:
-            if masking_strategy == 'aspect_masking':  
-                P = apply_pattern(PATTERNS[pattern_name])
-            elif masking_strategy == 'aspect_scoring':  
-                P = apply_pattern(SCORING_PATTERNS[pattern_name])
-            
-            train_samples = datasets[train_domain]['train']
-            exper_str = f"{train_domain}_{pattern_name}_{num_labelled}_{sample_selection}"
-            out_path = ROOT / 'mlm_data' / f'{exper_str}.txt'
 
-            args = train_samples, out_path, P
+        train_samples = datasets[train_domain]['train']
+        exper_str = f"{train_domain}_{num_labelled}_{masking_strategy}"
+        out_path = ROOT / 'mlm_data' / f'{exper_str}.csv'
 
-            if masking_strategy == 'aspect_masking':
-                # Use only samples with aspects
-                if sample_selection == 'take_positives':
-                    counts = replace_mask(*args, limit=num_labelled)
+        if masking_strategy == 'aspect_scoring':
+            count, unique_count = 0, 0
 
-                # Use only samples with aspects, match required labelled amount
-                elif sample_selection == 'match_positives':
-                    counts = replace_mask(*args)
+            with open(out_path, 'w') as f:
+                writer = csv.writer(f, delimiter="\t")
+                writer.writerow(["word", "is_aspect", "text"])
 
-                # Insert 'NONE' as an aspect when there are no aspects
-                elif sample_selection == 'negatives_with_none':
-                    counts = replace_mask(*args, none_replacement='NONE', \
-                        limit=num_labelled, require_aspects=False)
+                counts = 0
+                for text, *_, gold_aspects in train_samples[:num_labelled]:                    
+                    # add positive label examples
+                    label_pairs = [[gold_asp, "1"] for gold_asp in gold_aspects]
 
-            if masking_strategy == 'aspect_scoring': 
-                counts=0
-                with open(out_path, 'w') as f:
-                    for txt, *_, gold_aspects in train_samples[:num_labelled]:
-                        # create positive examples
-                        replace_mask_scoring_pattern(f, P, txt, \
-                            replace_aspects=gold_aspects, replace_mask_token='Yes')
-                        # create negative examples: extract non-aspect nouns     
-                        nouns = [ent.text for ent in spacy_model(txt) if ent.pos_ == 'NOUN']
-                        non_asps = [x for x in nouns if x not in gold_aspects] 
-                        if non_asps:
-                            replace_mask_scoring_pattern(f, P, txt, \
-                                replace_aspects=non_asps, replace_mask_token='No') 
+                    # add negative label examples: extract non-aspect nouns     
+                    nouns = {ent.text for ent in spacy_model(text) if ent.pos_ == 'NOUN'}
+                    for non_asp in nouns - set(gold_aspects):
+                        label_pairs.append([non_asp, "0"])                            
+
+                    # write labelled examples to file
+                    if label_pairs: # skips examples without gold aspects and nouns
+                        writer.writerows([[*label_pair, text] for label_pair in label_pairs])
+                        unique_count += 1
+                        count += len(label_pairs)
+                counts = {'unique': unique_count, 'total': count}
 
         actual_num_labelled[train_domain] = counts                                 
 
