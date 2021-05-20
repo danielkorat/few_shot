@@ -29,8 +29,6 @@ from typing import Optional
 
 from datasets import load_dataset
 
-from modeling import STRING_TO_MODEL_CLS
-
 import transformers
 from transformers import (
     CONFIG_MAPPING,
@@ -38,29 +36,18 @@ from transformers import (
     AutoConfig,
     AutoModelForMaskedLM,
     AutoTokenizer,
+    DataCollatorForLanguageModeling,
     HfArgumentParser,
     Trainer,
     TrainingArguments,
     set_seed,
-    PreTrainedModel,
 )
 from transformers.trainer_utils import get_last_checkpoint, is_main_process
 
-from modeling import DataCollatorForPatternLanguageModeling
 
 logger = logging.getLogger(__name__)
 MODEL_CONFIG_CLASSES = list(MODEL_FOR_MASKED_LM_MAPPING.keys())
 MODEL_TYPES = tuple(conf.model_type for conf in MODEL_CONFIG_CLASSES)
-
-@dataclass
-class PatternMLMArguments:
-    """
-    Arguments pertaining to Pattern MLM training.
-    """
-
-    pattern: str = field(
-        metadata={"help": "The mask-pattern appended to every input example."},
-    )
 
 
 @dataclass
@@ -68,14 +55,6 @@ class ModelArguments:
     """
     Arguments pertaining to which model/config/tokenizer we are going to fine-tune, or train from scratch.
     """
-
-    model_cls: Optional[str] = field(
-        default=None,
-        metadata={
-            "help": "The pre-trained model class."
-            "Don't set if you want to train a model from scratch."
-        },
-    )
 
     model_name_or_path: Optional[str] = field(
         default=None,
@@ -179,18 +158,18 @@ class DataTrainingArguments:
                 assert extension in ["csv", "json", "txt"], "`validation_file` should be a csv, a json or a txt file."
 
 
-def main(args):
+def main():
     # See all possible arguments in src/transformers/training_args.py
     # or by passing the --help flag to this script.
     # We now keep distinct sets of args, for a cleaner separation of concerns.
 
-    parser = HfArgumentParser((ModelArguments, DataTrainingArguments, TrainingArguments, PatternMLMArguments))
-    if len(args) == 1 and args[0].endswith(".json"):
+    parser = HfArgumentParser((ModelArguments, DataTrainingArguments, TrainingArguments))
+    if len(sys.argv) == 2 and sys.argv[1].endswith(".json"):
         # If we pass only one argument to the script and it's the path to a json file,
         # let's parse it to get our arguments.
-        model_args, data_args, training_args, pattern_args = parser.parse_json_file(json_file=os.path.abspath(args[0]))
+        model_args, data_args, training_args = parser.parse_json_file(json_file=os.path.abspath(sys.argv[1]))
     else:
-        model_args, data_args, training_args, pattern_args = parser.parse_args_into_dataclasses(args=args)
+        model_args, data_args, training_args = parser.parse_args_into_dataclasses()
 
     # Detecting last checkpoint.
     last_checkpoint = None
@@ -300,18 +279,7 @@ def main(args):
             "You can do it from another script, save it, and load it from here, using --tokenizer_name."
         )
 
-    if model_args.model_cls:
-        model_cls = STRING_TO_MODEL_CLS[model_args.model_cls]
-        model = model_cls.from_pretrained(
-                    model_args.model_name_or_path,
-                    from_tf=bool(".ckpt" in model_args.model_name_or_path),
-                    config=config,
-                    cache_dir=model_args.cache_dir,
-                    revision=model_args.model_revision,
-                    use_auth_token=True if model_args.use_auth_token else None,
-                )
-
-    elif model_args.model_name_or_path:
+    if model_args.model_name_or_path:
         model = AutoModelForMaskedLM.from_pretrained(
             model_args.model_name_or_path,
             from_tf=bool(".ckpt" in model_args.model_name_or_path),
@@ -420,10 +388,7 @@ def main(args):
 
     # Data collator
     # This one will take care of randomly masking the tokens.
-    data_collator = DataCollatorForPatternLanguageModeling(
-        pattern=pattern_args.pattern,
-        tokenizer=tokenizer, 
-        mlm_probability=data_args.mlm_probability)
+    data_collator = DataCollatorForLanguageModeling(tokenizer=tokenizer, mlm_probability=data_args.mlm_probability)
 
     # Initialize our Trainer
     trainer = Trainer(
@@ -461,7 +426,9 @@ def main(args):
     results = {}
     if training_args.do_eval:
         logger.info("*** Evaluate ***")
+
         eval_output = trainer.evaluate()
+
         perplexity = math.exp(eval_output["eval_loss"])
         results["perplexity"] = perplexity
 
@@ -472,6 +439,7 @@ def main(args):
                 for key, value in sorted(results.items()):
                     logger.info(f"  {key} = {value}")
                     writer.write(f"{key} = {value}\n")
+
     return results
 
 
@@ -481,4 +449,4 @@ def _mp_fn(index):
 
 
 if __name__ == "__main__":
-    main(sys.argv)
+    main()
