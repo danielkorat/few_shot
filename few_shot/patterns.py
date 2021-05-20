@@ -30,7 +30,11 @@ P_B10 ="So my review towards the <aspect> is <mask>"
 P_B11 ="Is <aspect> the aspect in the previous sentence? <mask>"
 
 P_B12 ="Is there sentiment towards <aspect> in the previous sentence? <mask>"
-P_B13 ="So, does the review in the previous sentence focuses on the <aspect>? <mask>"
-P_B14 ="So, does this review focuses on the <aspect>? <mask>"
+P_B13 ="So, does the review in the previous sentence focuses on <aspect>? <mask>"
+P_B14 ="So, is <aspect> the topic of my review? <mask>"
+P_B15 ="does this review focuses on <aspect>? <mask>"
+P_B16 ="So, is <aspect> the aspect in the previous sentence? <mask>"
 
-SCORING_PATTERNS = {'P_B1': P_B1, 'P_B2': P_B2, 'P_B3': P_B3, 'P_B4': P_B4, 'P_B5': P_B5, 'P_B6': P_B6, 'P_B7': P_B7, 'P_B8': P_B8, 'P_B9': P_B9, 'P_B10': P_B10, 'P_B11': P_B11, 'P_B12': P_B12}
+
+SCORING_PATTERNS = {'P_B1': P_B1, 'P_B2': P_B2, 'P_B3': P_B3, 'P_B4': P_B4, 'P_B5': P_B5, 'P_B6': P_B6, 'P_B7': P_B7, 'P_B8': P_B8, 'P_B9': P_B9,
+                    'P_B10': P_B10, 'P_B11': P_B11, 'P_B12': P_B12, 'P_B13': P_B13, 'P_B14': P_B14, 'P_B15': P_B15}

@@ -2,12 +2,38 @@ from transformers import pipeline
 from sys import stdout
 import torch
 import spacy
-
+from spacy.tokens import Doc
+from collections import defaultdict
+import numpy as np
 from patterns import PATTERNS, SCORING_PATTERNS
 
 MODELS_DICT = {}
 
-spacy_model = spacy.load('en_core_web_sm')
+# use this in order for spacy to use external tokens list as input (no spacy tokenization)
+class PretokenizedTokenizer:
+    #"""Custom tokenizer to be used in spaCy when the text is already pretokenized."""
+    def __init__(self, vocab):
+    #  """Initialize tokenizer with a given vocab
+    #  :param vocab: an existing vocabulary (see https://spacy.io/api/vocab)
+    #  """
+        self.vocab = vocab
+ 
+    def __call__(self, inp) -> Doc:
+    # """Call the tokenizer on input `inp`.
+    # :param inp: either a string to be split on whitespace, or a list of tokens
+    # :return: the created Doc object
+    # """
+        if isinstance(inp, str):
+            words = inp.split()
+            spaces = [True] * (len(words) - 1) + ([True] if inp[-1].isspace() else [False])
+            return Doc(self.vocab, words=words, spaces=spaces)
+        elif isinstance(inp, list):
+            return Doc(self.vocab, words=inp)
+        else:
+            raise ValueError("Unexpected input format. Expected string to be split on whitespace, or list of tokens.")
+
+spacy_model = spacy.load('en_core_web_lg', disable=["ner", "vectors", "textcat", "parse", "lemmatizer", "textcat"])
+spacy_model.tokenizer = PretokenizedTokenizer(spacy_model.vocab)
 
 def get_fm_pipeline(model_name):
 
@@ -29,7 +55,7 @@ def get_fm_pipeline(model_name):
 
     return fm_pipeline
 
-def extract_aspects(fm_pipeline, scoring_pipeline, text, tokens, pattern_names, scoring_patterns=None,
+def extract_aspects(fm_pipeline, scoring_pipelines, text, tokens, pattern_names, scoring_patterns=None,
                             top_k=10, thresh=-1, target=True, step_1_nouns_only=False, **kwargs):
     
     hparams = locals()
@@ -42,34 +68,40 @@ def extract_aspects(fm_pipeline, scoring_pipeline, text, tokens, pattern_names, 
                                                     top_k, thresh, target_flag=True, **kwargs)
     else:    
         preds, pred_bio = extract_candidate_aspects_as_nouns(text, tokens)
+       
     
     if scoring_patterns:
         #--------- aspect scoring --------
         
-        pattern = SCORING_PATTERNS[scoring_patterns[0]]
+        #pattern = SCORING_PATTERNS[scoring_patterns[0]]
         valid_preds=[]
 
         for pred in preds:
+            aspect_token = pred[0]
             #target_terms=['good', 'great', 'amazing', 'bad', 'awful', 'horrible']
             #target_terms=['positive', 'negative', 'neutral', 'ok', 'none']
             target_terms=['Yes', 'No']
             # add leading space to targets as mask predictions function needs
             target_terms = [' '+target for target in target_terms ]
-            mask_preds = fill_mask_preds(scoring_pipeline, text, target_terms, pattern, top_k, target_flag=True, aspect_token=pred)
-
-            #if mask_preds[0]['score']>0.02:
-            score_ratio = mask_preds[0]['score']/mask_preds[1]['score']
+            pos_scores, neg_scores = [], []
+            for scoring_pipeline, scoring_pattern in zip(scoring_pipelines, scoring_patterns):
+                pattern = SCORING_PATTERNS[scoring_pattern]
+                mask_preds = fill_mask_preds(scoring_pipeline, text, target_terms, pattern, top_k, target_flag=True, aspect_token=aspect_token)
+                if mask_preds[0]['token_str']==' Yes':
+                    pos_scores.append(mask_preds[0]['score'])
+                    neg_scores.append(mask_preds[1]['score'])
+                else:
+                    pos_scores.append(mask_preds[1]['score'])
+                    neg_scores.append(mask_preds[0]['score']) 
             
-            if mask_preds[0]['token_str']==' Yes':
+            if (np.mean(pos_scores)>np.mean(neg_scores)):
                 valid_preds.append(pred)
-            # else:
-            #     if score_ratio<1.5:
-            #         valid_preds.append(pred)
+           
 
-                
             #calc pred_bio again
-        preds = valid_preds    
-        pred_bio = generate_bio(tokens=tokens, preds=preds)    
+        preds = [item[0] for item in valid_preds]
+        idx_all = [item[1] for item in valid_preds]
+        pred_bio = ['B-ASP' if i in idx_all else 'O' for i in range(len(tokens))]                
     
     return preds, pred_bio, hparams
 
@@ -95,7 +127,6 @@ def extract_candidate_aspects(fm_pipeline, text, tokens, pattern_names,
             mask_preds = validate_pred_tokens(text, tokens, mask_preds, nouns, thresh = thresh)
             mask_preds_all.append(mask_preds)
         
-        
         mask_preds = merge_mask_preds(mask_preds_all=mask_preds_all, strategy='union')
         # if mask_preds:
         #     mask_preds = score_aspects(fm_pipeline, text, mask_preds, mask_preds_all,PATTERNS, pattern_names)
@@ -106,12 +137,14 @@ def extract_candidate_aspects(fm_pipeline, text, tokens, pattern_names,
     return preds, pred_bio
 
 def extract_candidate_aspects_as_nouns(text, tokens):
+    # spacy uses tokens list as input (no spacy tokenization)
+    nouns = [(ent.text,ent.i) for ent in spacy_model(tokens) if ent.pos_ == 'NOUN' or ent.pos_ =='PROPN']
 
-    nouns = [ent.text for ent in spacy_model(text) if ent.pos_ == 'NOUN']
-    preds = nouns
-    pred_bio = generate_bio(tokens=tokens, preds=preds)
+    #preds = [item[0] for item in nouns]
+    idx_all = [item[1] for item in nouns]
+    pred_bio = ['B-ASP' if i in idx_all else 'O' for i in range(len(tokens))]    
 
-    return preds, pred_bio
+    return nouns, pred_bio
 
 def fill_mask_preds(fm_pipeline, text, target_terms, pattern, top_k, target_flag, aspect_token=None):
     delim = ' ' if text[-1] in ('.', '!', '?') else '. '

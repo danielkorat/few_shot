@@ -72,16 +72,23 @@ def eval_pretrained():
     pattern_kwargs = dict(pattern='P5', top_k=10, step_1_nouns_only=True)
     data = load_all_datasets(train_size=200)
     model_names=['roberta-base']
-    #scoring_model_names = ['p-mlm_model_scoring_P_B12_rest_100']
+    scoring_model_names = ['p-mlm_model_scoring_P_B13_rest_100']
+    #scoring_model_names = ['p-mlm_model_scoring_P_B15_rest_16']
     #scoring_model_names = ['p-mlm_model_scoring_P_B12_lap_100']
-    scoring_model_names = None
+    #scoring_model_names = ['p-mlm_model_scoring_P_B14_lap_100']
+    #scoring_model_names = (['p-mlm_model_scoring_P_B12_rest_16', 'p-mlm_model_scoring_P_B13_rest_16','p-mlm_model_scoring_P_B14_rest_16','p-mlm_model_scoring_P_B15_rest_16'])
+    #scoring_model_names = (['p-mlm_model_scoring_P_B12_rest_100', 'p-mlm_model_scoring_P_B13_rest_100', 'p-mlm_model_scoring_P_B14_rest_100'])
+    #scoring_model_names = (['p-mlm_model_scoring_P_B12_rest_100'])
+   
     #pattern_groups=(['P1','P2'], ['P1','P2','P3'], ['P1','P2','P3','P4'],['P1','P2','P3','P4','P5'],['P1','P2','P3','P4','P5','P6'],['P1','P2','P3','P4','P5','P6','P7'],['P1','P2','P3','P4','P5','P6','P7','P8'])
     #pattern_groups=(['P1','P2'],['P1','P2','P3'])
     pattern_groups=(['P1'],)
-    #scoring_patterns=(['P_B12'])
-    scoring_patterns=None
+    scoring_patterns=(['P_B13'])
+    test_domain='rest'
+    
+    #scoring_patterns=None
     for pattern_names in pattern_groups:
-        eval_results = eval_ds(data, test_domain='lap', pattern_names=pattern_names, model_names=model_names,scoring_model_names=scoring_model_names, 
+        eval_results = eval_ds(data, test_domain=test_domain, pattern_names=pattern_names, model_names=model_names,scoring_model_names=scoring_model_names, 
             scoring_patterns=scoring_patterns, **pattern_kwargs)
         print("Stats:", eval_results['metrics'], "   Patterns: ", pattern_names)
 
@@ -90,14 +97,13 @@ def main():
     
     eval_pretrained()
    
-
-    #  train_scoring_pattern(pattern_names=('P_B12',), labelled_amounts=range(100, 101), sample_selection='negatives_with_none',
-    #      model_name='roberta-base', train_domains=['lap'], test_domains=['lap'],
-    #      masking_strategy='aspect_scoring')#, max_steps=5, test_limit=5)    
+    # train_scoring_pattern(pattern_names=('P_B13',), labelled_amounts=range(100, 101), sample_selection='negatives_with_none',
+    #     model_name='roberta-base', train_domains=['rest'], test_domains=['lap'],
+    #     masking_strategy='aspect_scoring')#, max_steps=5, test_limit=5)    
 
 if __name__ == "__main__":
     main()
-    # plot_few_shot('lap', *pickle.load(open(f'lap_plot_data.pkl', 'rb')), "dfgdf")
+    #plot_few_shot('lap', *pickle.load(open(f'lap_plot_data.pkl', 'rb')), "dfgdf")
 
 
 

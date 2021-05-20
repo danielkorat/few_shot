@@ -1,3 +1,4 @@
+from spacy import tokens
 from patterns import ROOT
 from os import makedirs
 import os
@@ -14,7 +15,8 @@ import plotly.express as px
 from matplotlib import pyplot as plt
 import numpy as np
 import seaborn as sns
-from extract_aspects import extract_aspects, generate_bio, get_fm_pipeline
+from operator import itemgetter
+from extract_aspects import extract_aspects, generate_bio, get_fm_pipeline, PretokenizedTokenizer
 import spacy
 from patterns import PATTERNS, SCORING_PATTERNS
 
@@ -22,7 +24,10 @@ logging.disable(logging.WARNING)
 
 from tqdm import tqdm as tq
 
-spacy_model = spacy.load('en_core_web_sm')
+spacy_model = spacy.load('en_core_web_lg', disable=["ner", "vectors", "textcat", "parse", "lemmatizer", "textcat"])
+spacy_model.tokenizer = PretokenizedTokenizer(spacy_model.vocab)
+
+#spacy_model = spacy.load('en_core_web_lg')
 
 def tqdm(iter, **kwargs):
     return tq(list(iter), kwargs, position=0, leave=True, file=stdout)
@@ -188,8 +193,11 @@ def eval_ds(ds_dict, test_domain, pattern_names, model_names,scoring_model_names
     if len(model_names) != len(pattern_names):
         model_names *= len(pattern_names)
 
-    scoring_pipeline = get_fm_pipeline(scoring_model_names[0]) if scoring_model_names else None
-  
+    scoring_pipelines = []
+    for scoring_model in scoring_model_names:
+        scoring_pipeline = get_fm_pipeline(scoring_model)
+        scoring_pipelines.append(scoring_pipeline)
+
     all_preds_list = []
     for i, (model_name, pattern_name) in enumerate(zip(model_names, pattern_names)):
 
@@ -197,10 +205,9 @@ def eval_ds(ds_dict, test_domain, pattern_names, model_names,scoring_model_names
         fm_pipeline = get_fm_pipeline(model_name)
 
         all_preds_bio, all_preds = [], []
-
+        err_analysis_list=[]
         for text, tokens, gold_bio, aspects in tqdm(test_data):
-
-            preds, preds_bio, hparams = extract_aspects(fm_pipeline=fm_pipeline, scoring_pipeline=scoring_pipeline,
+            preds, preds_bio, hparams = extract_aspects(fm_pipeline=fm_pipeline, scoring_pipelines=scoring_pipelines,
                 text=text, tokens=tokens,\
                 pattern_names=(pattern_name,), scoring_patterns=scoring_patterns, **kwargs)
 
@@ -209,6 +216,10 @@ def eval_ds(ds_dict, test_domain, pattern_names, model_names,scoring_model_names
 
             if i == 0:
                 all_gold_bio.append(gold_bio)
+            
+            # evaluate pred TP/FP/FN
+            # err_analysis = evaluate_term(text, tokens, preds_bio, gold_bio)
+            # err_analysis_list.append(err_analysis)
 
         # write predictions to file
         makedirs(ROOT / 'predictions', exist_ok=True)
@@ -227,6 +238,8 @@ def eval_ds(ds_dict, test_domain, pattern_names, model_names,scoring_model_names
             bio = generate_bio(tokens=tokens, preds=list({p for preds in all_preds for p in preds}))
             final_preds_bio.append(bio)
 
+    err_analysis_list = evaluate_term(test_data, final_preds_bio)
+    
     preds_fname = f"{model_names[0]}_{test_domain}"
     if len(model_names) > 1:
         preds_fname = preds_fname.replace(pattern_names[0], '+'.join(pattern_names))
@@ -234,8 +247,39 @@ def eval_ds(ds_dict, test_domain, pattern_names, model_names,scoring_model_names
     with open(f"predictions/{preds_fname}.json", 'w') as f:
         json.dump((final_preds_bio), f, indent=2)
 
+    #write TP/FP/FN detailed evaluation file
+    with open(f"predictions/{preds_fname}.csv", "wt") as fp:
+        csv_headers = ["Eval_type", "Term", "Text"]
+        writer = csv.DictWriter(fp, fieldnames=csv_headers)
+        writer.writerow({'Eval_type':"Eval_type", 'Term':"Term", 'Text':"Text"})
+        sorted_err_analysis_list = sorted(err_analysis_list, key=lambda i: (i['Eval_type'], i['Term']))
+        for data in sorted_err_analysis_list:
+            writer.writerow(data)
+
     return {'metrics': metrics(all_gold_bio, final_preds_bio, test_domain, **kwargs), 'hparams': hparams}
 
+def evaluate_term(test_data, all_preds_bio):
+    err_analysis_list=[]
+    i=0
+    
+    for text, tokens, gold_bio, _ in test_data :
+        preds_bio = all_preds_bio[i]
+        j=0
+        for p_bio, g_bio in zip(preds_bio, gold_bio):
+            eval_type = 'TN'
+            if g_bio == 'B-ASP' and p_bio == 'B-ASP':
+                eval_type = 'TP'
+            if g_bio == 'O' and p_bio == 'B-ASP': 
+                eval_type = 'FP'   
+            if g_bio == 'B-ASP' and p_bio == 'O':
+                eval_type = 'FN'
+            if eval_type is not 'TN':    
+                err_analysis={'Eval_type':eval_type, 'Term': tokens[j], 'Text':text }
+                err_analysis_list.append(err_analysis)  
+            j=j+1
+        i=i+1
+
+    return err_analysis_list 
 
 def evaluate(test_domains, pattern_names, model_names, **kwargs):
     ds_dict = load_all_datasets()
@@ -336,13 +380,15 @@ def create_mlm_train_sets(datasets, num_labelled, sample_selection, pattern_name
 
             if masking_strategy == 'aspect_scoring': 
                 counts=0
-                with open(out_path, 'w') as f:
-                    for txt, *_, gold_aspects in train_samples[:num_labelled]:
+                with open(out_path, 'w') as f:            
+                    #for txt, *_, gold_aspects in train_samples[:num_labelled]:
+                    for txt, tokens, _ , gold_aspects in train_samples[:num_labelled]:    
                         # create positive examples
                         replace_mask_scoring_pattern(f, P, txt, \
                             replace_aspects=gold_aspects, replace_mask_token='Yes')
                         # create negative examples: extract non-aspect nouns     
-                        nouns = [ent.text for ent in spacy_model(txt) if ent.pos_ == 'NOUN']
+                        nouns = [ent.text for ent in spacy_model(tokens) if ent.pos_ == 'NOUN' or ent.pos_ =='PROPN']
+                        #nouns = [ent.text for ent in spacy_model(txt) if ent.pos_ == 'NOUN' or ent.pos_ =='PROPN']
                         non_asps = [x for x in nouns if x not in gold_aspects] 
                         if non_asps:
                             replace_mask_scoring_pattern(f, P, txt, \
