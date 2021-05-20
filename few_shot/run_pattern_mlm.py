@@ -28,8 +28,11 @@ from dataclasses import dataclass, field
 from typing import Optional
 
 from datasets import load_dataset
+from transformers.models.bert.tokenization_bert import PRETRAINED_POSITIONAL_EMBEDDINGS_SIZES
 
 from modeling import BooleanPVP, STRING_TO_MODEL_CLS
+
+from modeling import DataCollatorForPatternLanguageModeling
 
 import transformers
 from transformers import (
@@ -243,6 +246,8 @@ def main(args):
     extension = data_args.train_file.split(".")[-1]
     datasets = load_dataset(extension, data_files=data_files, delimiter='\t')
 
+    old_datasets = load_dataset('text', data_files={'train': '/home/daniel_nlp/few_shot/mlm_data/rest_100_aspect_scoring.txt'})
+
     config_kwargs = {
         "cache_dir": model_args.cache_dir,
         "revision": model_args.model_revision,
@@ -300,64 +305,89 @@ def main(args):
         model = AutoModelForMaskedLM.from_config(config)
 
     model.resize_token_embeddings(len(tokenizer))
+    
+    OLD = False
 
-    # Preprocessing the datasets: add mlm_labels
-    def pattern_mlm_preprocess(examples):
-        # Remove empty lines
-        examples["text"] = [line for line in examples["text"] if len(line) > 0 and not line.isspace()]
-        examples['input_ids'], examples['token_type_ids'], examples['attention_mask'],\
-            examples['mlm_labels'] = [], [], [], []
-        
-        for word, text in zip(examples['word'], examples['text']):
+    if OLD:
+        def tokenize_function(examples):
+            return tokenizer(
+                examples["text"],
+                padding=False,
+                truncation=True,
+                max_length=data_args.max_seq_length,
+                # We use this option because DataCollatorForLanguageModeling (see below) is more efficient when it
+                # receives the `special_tokens_mask`.
+                return_special_tokens_mask=True,
+            )
 
-            input_ids, token_type_ids = pvp.encode(text, word)
+        datasets = old_datasets.map(
+            tokenize_function,
+            batched=True,
+            num_proc=data_args.preprocessing_num_workers,
+            # remove_columns=[text_column_name],
+            load_from_cache_file=not data_args.overwrite_cache,
+            )
 
-            attention_mask = [1] * len(input_ids)
-            padding_length = data_args.max_seq_length - len(input_ids)
+        data_collator = DataCollatorForPatternLanguageModeling(
+            pattern=pattern_args.pattern,
+            tokenizer=tokenizer, 
+            mlm_probability=data_args.mlm_probability)
 
-            if padding_length < 0:
-                raise ValueError(f"Maximum sequence length is too small, got {len(input_ids)} input ids")
-                assert False
+    else:
+        def pattern_mlm_preprocess(examples):
+            # Remove empty lines
+            examples["text"] = [line for line in examples["text"] if len(line) > 0 and not line.isspace()]
+            examples["p_text"] = []
+            pattern = "Is there sentiment towards <aspect> in the previous sentence? <mask>"
 
-            input_ids = input_ids + ([tokenizer.pad_token_id] * padding_length)
-            attention_mask = attention_mask + ([0] * padding_length)
-            token_type_ids = token_type_ids + ([0] * padding_length)
+            for word, text in zip(examples['word'], examples['text']):
+                examples["p_text"].append(text + ' ' + pattern.replace("<aspect>", word))
 
-            assert len(input_ids) == data_args.max_seq_length
-            assert len(attention_mask) == data_args.max_seq_length
-            assert len(token_type_ids) == data_args.max_seq_length
+            assert len({len(e) for e in examples.values()}) == 1
 
-            mlm_labels = pvp.get_mask_positions(input_ids)
-            
-            examples['input_ids'].append(input_ids)
-            examples['token_type_ids'].append(token_type_ids)
-            examples['attention_mask'].append(attention_mask)
-            examples['mlm_labels'].append(mlm_labels)
+            tokenized = tokenizer(
+                examples["p_text"],
+                padding=False,
+                truncation=True,
+                max_length=data_args.max_seq_length,
+                return_special_tokens_mask=True,
+            )
+            tokenized['mlm_labels'] = [pvp.get_mask_positions(ids) for ids in tokenized['input_ids']]
+            tokenized['text'] = examples['text']
+            return tokenized
 
-        assert len({len(e) for e in examples.values()}) == 1
-        return examples
+        datasets = datasets.map(
+            pattern_mlm_preprocess,
+            batched=True,
+            num_proc=data_args.preprocessing_num_workers,
+            # remove_columns=['text', 'word'],
+            load_from_cache_file=not data_args.overwrite_cache,
+        )
 
-    preprocessed_datasets = datasets.map(
-        pattern_mlm_preprocess,
-        batched=True,
-        num_proc=data_args.preprocessing_num_workers,
-        remove_columns=['text', 'word'],
-        load_from_cache_file=not data_args.overwrite_cache,
-    )
+        data_collator = DataCollatorForLanguageModeling(
+            # pattern=pattern_args.pattern,
+            tokenizer=tokenizer, 
+            mlm_probability=data_args.mlm_probability)
 
-    # Data collator
-    # This one will take care of randomly masking the tokens.
-    data_collator = DataCollatorForLanguageModeling(
-        # pattern=pattern_args.pattern,
-        tokenizer=tokenizer, 
-        mlm_probability=data_args.mlm_probability)
+    # for (old, new) in zip(old_datasets['train'], datasets['train']):
+    #     # print('-------------------------------')
+    #     assert old['input_ids'][:-2] == new['input_ids'][:-2]
+    #         # print(old['text'])
+    #         # # print(old['input_ids'])
+    #         # # print(tokenizer.decode(old['input_ids']))
+
+    #         # # print()
+    #         # print(new['p_text'])
+    #         # # print(new['input_ids'])
+    #         # # print(tokenizer.decode(new['input_ids']))
+    #         # print()
 
     # Initialize our Trainer
     trainer = Trainer(
         model=model,
         args=training_args,
-        train_dataset=preprocessed_datasets["train"] if training_args.do_train else None,
-        eval_dataset=preprocessed_datasets["validation"] if training_args.do_eval else None,
+        train_dataset=datasets["train"] if training_args.do_train else None,
+        eval_dataset=datasets["validation"] if training_args.do_eval else None,
         tokenizer=tokenizer,
         data_collator=data_collator,
     )

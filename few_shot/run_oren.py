@@ -28,18 +28,18 @@ def eval_model(model_names=['roberta-base'], scoring_model_names=None):
     pattern_groups=(['P1'],)
     scoring_patterns=['P_B12']
     for pattern_names in pattern_groups:
-        eval_results = eval_ds(data, test_domain='lap', pattern_names=pattern_names, model_names=model_names, 
+        eval_results = eval_ds(data, test_domain='rest', pattern_names=pattern_names, model_names=model_names, 
             scoring_model_names=scoring_model_names, scoring_patterns=scoring_patterns, **pattern_kwargs)
         print("Stats:", eval_results['metrics'], "   Patterns: ", pattern_names)
 
 
 def main():
-   
     model = train_scoring_pattern(pattern_names=('P_B12',), labelled_amounts=range(100, 101), 
         sample_selection='negatives_with_none', model_name='roberta-base', 
         train_domains=['rest'], test_domains=['rest'],
-        masking_strategy='aspect_scoring') #, max_steps=5, test_limit=5)    
+        masking_strategy='aspect_scoring') #, max_steps=5, test_limit=5)
 
+    # print(f"trained model: {model}")
     eval_model(scoring_model_names=["rest_100_aspect_scoring"])
 
 if __name__ == "__main__":

@@ -20,7 +20,7 @@ def pattern_mlm_preprocess(num_labelled_list, train_domains, sample_selection, *
     return res
 
 def train_mlm(train_domain, num_labelled, pattern_names, sample_selection, masking_strategy,
-            seed=42, lr=1e-05, max_seq=256, max_steps=1000, batch_size=12,
+            seed=42, lr=1e-05, max_seq=256, max_steps=1000, batch_size=16,
             validation=None, model_type='roberta', model_name='roberta-base', **kwargs):
     hparams = locals()
     for v in 'train_domain', 'num_labelled', 'kwargs':
@@ -31,7 +31,7 @@ def train_mlm(train_domain, num_labelled, pattern_names, sample_selection, maski
     # hparams used in PET: 
     # lr", "1x10^-5, batch_size", "16, max_len", "256, steps", "1000
     # every batch: 4 labelled + 12 unlabelled
-    # os.environ["CUDA_VISIBLE_DEVICES"] = "-1"
+    os.environ["CUDA_VISIBLE_DEVICES"] = "-1" #"2,3"
 
     for pattern_name in pattern_names:
         print(f"Running train_mlm() for pattern {pattern_name}...")

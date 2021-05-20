@@ -80,6 +80,89 @@ class RobertaForMLMWithCE(RobertaForMaskedLM):
 
 STRING_TO_MODEL_CLS = {'RobertaForMLMWithCE': RobertaForMLMWithCE}
 
+@dataclass
+class DataCollatorForPatternLanguageModeling(DataCollatorForLanguageModeling):
+    def mask_tokens(
+        self, inputs: torch.Tensor, special_tokens_mask: Optional[torch.Tensor] = None
+    ) -> Tuple[torch.Tensor, torch.Tensor]:
+        """
+        Prepare masked tokens inputs/labels for masked language modeling: 80% MASK, 10% random, 10% original.
+        """
+        labels = inputs.clone()
+        # We sample a few tokens in each sequence for MLM training (with probability `self.mlm_probability`)
+        probability_matrix = torch.full(labels.shape, self.mlm_probability)
+        if special_tokens_mask is None:
+            special_tokens_mask = [
+                self.tokenizer.get_special_tokens_mask(val, already_has_special_tokens=True) for val in labels.tolist()
+            ]
+            special_tokens_mask = torch.tensor(special_tokens_mask, dtype=torch.bool)
+        else:
+            special_tokens_mask = special_tokens_mask.bool()
+
+        probability_matrix.masked_fill_(special_tokens_mask, value=0.0)
+        masked_indices = torch.bernoulli(probability_matrix).bool()
+        labels[~masked_indices] = -100  # We only compute loss on masked tokens
+
+        # 80% of the time, we replace masked input tokens with tokenizer.mask_token ([MASK])
+        indices_replaced = torch.bernoulli(torch.full(labels.shape, 0.8)).bool() & masked_indices
+        inputs[indices_replaced] = self.tokenizer.convert_tokens_to_ids(self.tokenizer.mask_token)
+
+        # 10% of the time, we replace masked input tokens with random word
+        indices_random = torch.bernoulli(torch.full(labels.shape, 0.5)).bool() & masked_indices & ~indices_replaced
+        random_words = torch.randint(len(self.tokenizer), labels.shape, dtype=torch.long)
+        inputs[indices_random] = random_words[indices_random]
+
+        # The rest of the time (10% of the time) we keep the masked input tokens unchanged
+        return inputs, labels
+
+@dataclass
+class DataCollatorForPatternLanguageModelingOld(DataCollatorForLanguageModeling):
+
+    pattern: str = None
+
+    def __post_init__(self):
+        pattern_tokens = self.tokenizer.tokenize(self.pattern)
+        idx = pattern_tokens.index(' ' + self.tokenizer.mask_token)
+        self.pattern_mask_idx = idx - len(pattern_tokens)
+
+    def mask_tokens(
+        self, inputs: torch.Tensor, special_tokens_mask: Optional[torch.Tensor] = None
+    ) -> Tuple[torch.Tensor, torch.Tensor]:
+        """
+        Prepare masked tokens inputs/labels for masked language modeling: 80% MASK, 10% random, 10% original.
+        """
+        labels = inputs.clone()
+        # We sample a few tokens in each sequence for MLM training (with probability `self.mlm_probability`)
+        probability_matrix = torch.full(labels.shape, self.mlm_probability)
+        if special_tokens_mask is None:
+            special_tokens_mask = [
+                self.tokenizer.get_special_tokens_mask(val, already_has_special_tokens=True) for val in labels.tolist()
+            ]
+            special_tokens_mask = torch.tensor(special_tokens_mask, dtype=torch.bool)
+        else:
+            special_tokens_mask = special_tokens_mask.bool()
+
+        probability_matrix.masked_fill_(special_tokens_mask, value=0.0)
+
+        # Pattern MLM: set pattern-mask token masking probability to 1.0:
+        for label_vector, prob_vector in zip(labels.tolist(), probability_matrix):
+            mask_idx = (label_vector + [1]).index(1) + self.pattern_mask_idx - 1
+            prob_vector[mask_idx] = 1.0
+
+        masked_indices = torch.bernoulli(probability_matrix).bool()
+        labels[~masked_indices] = -100  # We only compute loss on masked tokens
+
+        # 80% of the time, we replace masked input tokens with tokenizer.mask_token ([MASK])
+        indices_replaced = torch.bernoulli(torch.full(labels.shape, 0.8)).bool() & masked_indices
+        inputs[indices_replaced] = self.tokenizer.convert_tokens_to_ids(self.tokenizer.mask_token)
+
+        # 10% of the time, we replace masked input tokens with random word
+        indices_random = torch.bernoulli(torch.full(labels.shape, 0.5)).bool() & masked_indices & ~indices_replaced
+        random_words = torch.randint(len(self.tokenizer), labels.shape, dtype=torch.long)
+        inputs[indices_random] = random_words[indices_random]
+
+        # The rest of the time (10% of the time) we keep the masked input tokens unchanged
+        return inputs, labels
 
 class BooleanPVP:
     VERBALIZER = {
@@ -90,8 +173,8 @@ class BooleanPVP:
     def get_parts(self, example, word):
         text = self.shortenable(example)
         pattern = "Is there sentiment towards <aspect> in the previous sentence?"
-        pattern = pattern.replace("<aspect>", word)
-        return [text, pattern, self.mask, '.']
+        pattern = ' ' + pattern.replace("<aspect>", word)
+        return [text, pattern, self.mask]
 
     def __init__(self, tokenizer, max_seq_length) -> None:
         self.label_list = BooleanPVP.VERBALIZER.keys()
@@ -133,9 +216,9 @@ class BooleanPVP:
         """
 
         parts = self.get_parts(text, word)
-        kwargs = {} #{'add_prefix_space': True}
         parts = [x if isinstance(x, tuple) else (x, False) for x in parts]
-        parts = [(self.tokenizer.encode(x, add_special_tokens=False, **kwargs), s) for x, s in parts if x]
+        token_text = [(x, s) for x, s in parts if x]
+        parts = [(self.tokenizer.encode(x, add_special_tokens=False, **kwargs), s) for x, s in token_text]
         self.truncate(parts, max_length=self.max_seq_length)
         tokens = [token_id for part, _ in parts for token_id in part]
         input_ids = self.tokenizer.build_inputs_with_special_tokens(tokens, None)

@@ -303,36 +303,45 @@ def replace_mask_scoring_pattern(f, P, x, replace_aspects, replace_mask_token):
 def create_mlm_train_sets(datasets, num_labelled, train_domains, masking_strategy, **kwargs):
     actual_num_labelled = {}
     makedirs(ROOT / 'mlm_data', exist_ok=True)
-    
+
+    pattern = "Is there sentiment towards <aspect> in the previous sentence? <mask>"
+
     for train_domain in train_domains:
 
         train_samples = datasets[train_domain]['train']
         exper_str = f"{train_domain}_{num_labelled}_{masking_strategy}"
-        out_path = ROOT / 'mlm_data' / f'{exper_str}.csv'
+        out_path = str(ROOT / 'mlm_data' / f'{exper_str}')
 
         if masking_strategy == 'aspect_scoring':
             count, unique_count = 0, 0
 
-            with open(out_path, 'w') as f:
-                writer = csv.writer(f, delimiter="\t")
-                writer.writerow(["word", "is_aspect", "text"])
+            with open(out_path + '.csv', 'w') as f:
+                with open(out_path + '.txt', 'w') as txt_f:
 
-                counts = 0
-                for text, *_, gold_aspects in train_samples[:num_labelled]:                    
-                    # add positive label examples
-                    label_pairs = [[gold_asp, "1"] for gold_asp in gold_aspects]
+                    writer = csv.writer(f, delimiter="\t")
+                    writer.writerow(["word", "is_aspect", "text"])
 
-                    # add negative label examples: extract non-aspect nouns     
-                    nouns = {ent.text for ent in spacy_model(text) if ent.pos_ == 'NOUN'}
-                    for non_asp in nouns - set(gold_aspects):
-                        label_pairs.append([non_asp, "0"])                            
+                    counts = 0
+                    for text, *_, gold_aspects in train_samples[:num_labelled]:                    
+                        # add positive label examples
+                        label_pairs = [[gold_asp, "1"] for gold_asp in gold_aspects]
 
-                    # write labelled examples to file
-                    if label_pairs: # skips examples without gold aspects and nouns
-                        writer.writerows([[*label_pair, text] for label_pair in label_pairs])
-                        unique_count += 1
-                        count += len(label_pairs)
-                counts = {'unique': unique_count, 'total': count}
+                        # add negative label examples: extract non-aspect nouns     
+                        nouns = {ent.text for ent in spacy_model(text) if ent.pos_ == 'NOUN'}
+                        for non_asp in nouns - set(gold_aspects):
+                            label_pairs.append([non_asp, "0"])                            
+
+                        # write labelled examples to file
+                        if label_pairs: # skips examples without gold aspects and nouns
+                            writer.writerows([[*label_pair, text] for label_pair in label_pairs])
+
+                            for label_pair in label_pairs: 
+                                txt_f.write(text + ' ' + pattern.replace("<aspect>", label_pair[0]) + '\n')
+
+                            unique_count += 1
+                            count += len(label_pairs)
+
+                    counts = {'unique': unique_count, 'total': count}
 
         actual_num_labelled[train_domain] = counts                                 
 
