@@ -69,45 +69,46 @@ def extract_aspects(fm_pipeline, scoring_pipelines, text, tokens, pattern_names,
     else:    
         preds, pred_bio = extract_candidate_aspects_as_nouns(text, tokens)
        
-    
     if scoring_patterns:
-        #--------- aspect scoring --------
-        
-        #pattern = SCORING_PATTERNS[scoring_patterns[0]]
-        valid_preds=[]
-
-        for pred in preds:
-            aspect_token = pred[0]
-            #target_terms=['good', 'great', 'amazing', 'bad', 'awful', 'horrible']
-            #target_terms=['positive', 'negative', 'neutral', 'ok', 'none']
-            target_terms=['Yes', 'No']
-            # add leading space to targets as mask predictions function needs
-            target_terms = [' '+target for target in target_terms ]
-            pos_scores, neg_scores = [], []
-            for scoring_pipeline, scoring_pattern in zip(scoring_pipelines, scoring_patterns):
-                pattern = SCORING_PATTERNS[scoring_pattern]
-                mask_preds = fill_mask_preds(scoring_pipeline, text, target_terms, pattern, top_k, target_flag=True, aspect_token=aspect_token)
-                if mask_preds[0]['token_str']==' Yes':
-                    pos_scores.append(mask_preds[0]['score'])
-                    neg_scores.append(mask_preds[1]['score'])
-                else:
-                    pos_scores.append(mask_preds[1]['score'])
-                    neg_scores.append(mask_preds[0]['score']) 
-            
-            if (np.mean(pos_scores)>np.mean(neg_scores)):
-                valid_preds.append(pred)
-           
-
-            #calc pred_bio again
-        preds = [item[0] for item in valid_preds]
-        idx_all = [item[1] for item in valid_preds]
-        pred_bio = ['B-ASP' if i in idx_all else 'O' for i in range(len(tokens))]                
-    
+        preds, pred_bio = aspect_scoring(text, tokens, preds, scoring_pipelines, scoring_patterns, top_k)
+       
     return preds, pred_bio, hparams
 
 
+def aspect_scoring(text, tokens, preds, scoring_pipelines, scoring_patterns, top_k):
+    valid_preds=[]
+
+    for pred in preds:
+        aspect_token = pred[0]
+        #target_terms=['good', 'great', 'amazing', 'bad', 'awful', 'horrible']
+        #target_terms=['positive', 'negative', 'neutral', 'ok', 'none']
+        target_terms=['Yes', 'No']
+        # add leading space to targets as mask predictions function needs
+        target_terms = [' '+target for target in target_terms ]
+        pos_scores, neg_scores = [], []
+        for scoring_pipeline, scoring_pattern in zip(scoring_pipelines, scoring_patterns):
+            pattern = SCORING_PATTERNS[scoring_pattern]
+            mask_preds = fill_mask_preds(scoring_pipeline, text, target_terms, pattern, top_k, target_flag=True, aspect_token=aspect_token)
+            if mask_preds[0]['token_str']==' Yes':
+                pos_scores.append(mask_preds[0]['score'])
+                neg_scores.append(mask_preds[1]['score'])
+            else:
+                pos_scores.append(mask_preds[1]['score'])
+                neg_scores.append(mask_preds[0]['score']) 
+        
+        if (np.mean(pos_scores)>np.mean(neg_scores)):
+            valid_preds.append(pred)
+        
+        #calc pred_bio again
+    preds = [item[0] for item in valid_preds]
+    idx_all = [item[1] for item in valid_preds]
+    pred_bio = ['B-ASP' if i in idx_all else 'O' for i in range(len(tokens))] 
+
+    return preds, pred_bio
+
 def extract_candidate_aspects(fm_pipeline, text, tokens, pattern_names,
                                     top_k=10, thresh=-1, **kwargs):
+                                        
 
     nouns = [ent.text for ent in spacy_model(text) if ent.pos_ == 'NOUN']
 
