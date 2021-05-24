@@ -109,7 +109,6 @@ def aspect_scoring(text, tokens, preds, scoring_pipelines, scoring_patterns, top
 def extract_candidate_aspects(fm_pipeline, text, tokens, pattern_names,
                                     top_k=10, thresh=-1, **kwargs):
                                         
-
     nouns = [ent.text for ent in spacy_model(text) if ent.pos_ == 'NOUN']
 
     # Single patterns

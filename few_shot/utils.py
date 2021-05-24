@@ -104,7 +104,7 @@ def run_ds_examples(ds, model_name, pattern_name, **kwargs):
         print(f'gold: {aspects}\ngold_bio: {gold_bio}\nvalid_preds: {valid_preds}\npreds: {preds}\npred_bio: {pred_bio}\n')
     
 
-def metrics(gold, preds, domain, verbose=False, **kwargs):
+def eval_metrics(gold, preds, domain, verbose=False, **kwargs):
     F, P, R, conf = (f(gold, preds) for f in (f1_score, precision_score,\
                      recall_score, performance_measure))
     if verbose:
@@ -113,6 +113,23 @@ def metrics(gold, preds, domain, verbose=False, **kwargs):
 
     return {'Precision': round(P,3), 'Recall': round(R,3), 'F1': round(F,3)}
 
+def our_eval_metrics(gold, preds, verbose=False, **kwargs):
+
+    TP, FP, FN = 0, 0, 0
+    for g, p in zip(gold, preds):
+        len_g = len(gold)
+        for i in enumerate(len_g)-1:
+            if p(i) == "B-ASP" and g(i) == "B-ASP" and p(i+1) == "O" and g(i+1) == "O":
+                TP = TP+1
+                
+
+
+    
+    if verbose:
+        print(f'{domain}')
+        print(f'F1: {round(F, 3):.3f}, P: {P:.3f}, R: {R:.3f}, {conf}')
+
+    return {'Precision': round(P,3), 'Recall': round(R,3), 'F1': round(F,3)}
 
 def post_eval(ds_dict, domain, thresh=-1, **kwargs):
     with open(f'{domain}.pkl', 'rb') as f:
@@ -150,7 +167,7 @@ def post_eval(ds_dict, domain, thresh=-1, **kwargs):
         pred_bio = ['B-ASP' if i in valid_idx else 'O' for i in range(len(tokens))]
         all_preds_bio.append(pred_bio)
         all_gold_bio.append(gold_bio)
-    return {'metrics': metrics(all_gold_bio, all_preds_bio, domain)}
+    return {'metrics': eval_metrics(all_gold_bio, all_preds_bio, domain)}
 
 
 def run_example(text, tokens, top_k=10, thresh=-1, target=True, **kwargs):
@@ -256,7 +273,7 @@ def eval_ds(ds_dict, test_domain, pattern_names, model_names,scoring_model_names
         for data in sorted_err_analysis_list:
             writer.writerow(data)
 
-    return {'metrics': metrics(all_gold_bio, final_preds_bio, test_domain, **kwargs), 'hparams': hparams}
+    return {'metrics': eval_metrics(all_gold_bio, final_preds_bio, test_domain, **kwargs), 'hparams': hparams}
 
 def evaluate_term(test_data, all_preds_bio):
     err_analysis_list=[]
@@ -450,3 +467,21 @@ def plot_few_shot(train_domain, test_domains, plot_data, train_hparams={}, actua
                 .update_traces(mode="markers+lines", hovertemplate="%{customdata[1]}=%{y:.3f}<extra></extra>")\
                 .update_xaxes(showgrid=False, showspikes=True)\
                 .show()
+
+def create_asp_only_data_files(in_file_name, out_file_name):
+   
+    
+    full_in_file_name = ROOT / "data" / in_file_name
+    lines = []
+    for line in open(full_in_file_name, 'r'):
+        # delete opinion labels
+        line = line.replace("B-OP", "O")
+        line = line.replace("I-OP", "O")
+        lines.append(json.loads(line))
+
+    with open(ROOT / "data" / out_file_name, 'w') as f:
+        full_in_file_name = ROOT / "data" / out_file_name
+        f.write(
+            '\n'.join(json.dumps(i) for i in lines))
+
+        #json.dump((lines), f, indent=2)

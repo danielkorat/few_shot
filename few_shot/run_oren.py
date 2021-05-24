@@ -1,5 +1,5 @@
 from patterns import ROOT
-from utils import load_all_datasets, evaluate, create_mlm_train_sets, plot_few_shot, PATTERNS, SCORING_PATTERNS, eval_ds
+from utils import load_all_datasets, evaluate, create_mlm_train_sets, plot_few_shot, PATTERNS, SCORING_PATTERNS, eval_ds, create_asp_only_data_files
 from run_pattern_mlm import main as run_pattern_mlm
 import os
 import pickle
@@ -70,7 +70,7 @@ def train_scoring_pattern(labelled_amounts, **kwargs):
 
 def eval_pretrained():
     pattern_kwargs = dict(pattern='P5', top_k=10, step_1_nouns_only=True)
-    data = load_all_datasets(train_size=200)
+    data = load_all_datasets(train_size=2200)
     model_names=['roberta-base']
     scoring_model_names = ['p-mlm_model_scoring_P_B13_rest_100']
     #scoring_model_names = ['p-mlm_model_scoring_P_B15_rest_16']
@@ -94,12 +94,15 @@ def eval_pretrained():
 
 
 def main():
+
     
-    eval_pretrained()
+   create_asp_only_data_files("rest/asp+op/res_all.json", "rest/asp/res_all.json") 
+
+   #eval_pretrained()
    
-    # train_scoring_pattern(pattern_names=('P_B13',), labelled_amounts=range(100, 101), sample_selection='negatives_with_none',
-    #     model_name='roberta-base', train_domains=['rest'], test_domains=['lap'],
-    #     masking_strategy='aspect_scoring')#, max_steps=5, test_limit=5)    
+   # train_scoring_pattern(pattern_names=('P_B13',), labelled_amounts=range(16, 17), sample_selection='negatives_with_none',
+   #     model_name='roberta-base', train_domains=['rest'], test_domains=['lap'],
+   #     masking_strategy='aspect_scoring')#, max_steps=5, test_limit=5)    
 
 if __name__ == "__main__":
     main()
