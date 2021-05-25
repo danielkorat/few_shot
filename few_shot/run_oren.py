@@ -23,13 +23,13 @@ def train_mlm(train_domain, num_labelled, pattern_name, seed=42, lr=1e-05, max_s
 
     os.makedirs('models', exist_ok=True)
     if pattern_name.startswith('P_B'):
-        output_dir = f"models/p-mlm_model_scoring_{pattern_name}_{train_domain}_{num_labelled}"
+        output_dir = f"models/scoring_{pattern_name}_{train_domain}_{num_labelled}"
     else:
         output_dir = f"models/p-mlm_model_{train_domain}_{num_labelled}"
     # hparams used in PET: 
     # lr", "1x10^-5, batch_size", "16, max_len", "256, steps", "1000
     # every batch: 4 labelled + 12 unlabelled
-    # os.environ["CUDA_VISIBLE_DEVICES"] = "0"
+    os.environ["CUDA_VISIBLE_DEVICES"] = "2,3"
 
     os.environ["TOKENIZERS_PARALLELISM"] = 'false'
 
@@ -59,27 +59,24 @@ def train_mlm(train_domain, num_labelled, pattern_name, seed=42, lr=1e-05, max_s
 
 def train_scoring_pattern(labelled_amounts, **kwargs):
     actual_num_labelled = pattern_mlm_preprocess(labelled_amounts, **kwargs)
-    print("actual_num_labelled: ",actual_num_labelled) 
+    print("actual_num_labelled: ",actual_num_labelled)
+    trained_models = []
     for train_domain in kwargs['train_domains']:
         for num_labelled in labelled_amounts:
             print(f"\n{'-' * 50}\n\t\t  Num. Labelled: {num_labelled}\n{'-' * 50}")
-            p_mlm_model, hparams = train_mlm(train_domain, num_labelled, pattern_name=kwargs['pattern_names'][0], **kwargs)    
+            trained_model, hparams = train_mlm(train_domain, num_labelled, pattern_name=kwargs['pattern_names'][0], **kwargs)
+            trained_models.append(trained_model)
             print("Finished model training")
+    return trained_models
 
 
-def eval_pretrained():
+def eval(scoring_models):
     pattern_kwargs = dict(pattern='P5', top_k=10, step_1_nouns_only=True)
     data = load_all_datasets(train_size=2200)
     model_names=['roberta-base']
-    scoring_model_names = ['p-mlm_model_scoring_P_B13_rest_100']
-    #scoring_model_names = ['p-mlm_model_scoring_P_B15_rest_16']
-    #scoring_model_names = ['p-mlm_model_scoring_P_B12_lap_100']
-    #scoring_model_names = ['p-mlm_model_scoring_P_B14_lap_100']
-    #scoring_model_names = (['p-mlm_model_scoring_P_B12_rest_16', 'p-mlm_model_scoring_P_B13_rest_16','p-mlm_model_scoring_P_B14_rest_16','p-mlm_model_scoring_P_B15_rest_16'])
-    #scoring_model_names = (['p-mlm_model_scoring_P_B12_rest_100', 'p-mlm_model_scoring_P_B13_rest_100', 'p-mlm_model_scoring_P_B14_rest_100'])
-    #scoring_model_names = (['p-mlm_model_scoring_P_B12_rest_100'])
    
-    #pattern_groups=(['P1','P2'], ['P1','P2','P3'], ['P1','P2','P3','P4'],['P1','P2','P3','P4','P5'],['P1','P2','P3','P4','P5','P6'],['P1','P2','P3','P4','P5','P6','P7'],['P1','P2','P3','P4','P5','P6','P7','P8'])
+    #pattern_groups=(['P1','P2'], ['P1','P2','P3'], ['P1','P2','P3','P4'],['P1','P2','P3','P4','P5'],['P1','P2','P3','P4','P5','P6'],
+    # ['P1','P2','P3','P4','P5','P6','P7'],['P1','P2','P3','P4','P5','P6','P7','P8'])
     #pattern_groups=(['P1','P2'],['P1','P2','P3'])
     pattern_groups=(['P1'],)
     scoring_patterns=(['P_B13'])
@@ -87,19 +84,30 @@ def eval_pretrained():
     
     #scoring_patterns=None
     for pattern_names in pattern_groups:
-        eval_results = eval_ds(data, test_domain=test_domain, pattern_names=pattern_names, model_names=model_names,scoring_model_names=scoring_model_names, 
+        eval_results = eval_ds(data, test_domain=test_domain, pattern_names=pattern_names, model_names=model_names, scoring_model_names=scoring_models, 
             scoring_patterns=scoring_patterns, **pattern_kwargs)
         print("Stats:", eval_results['metrics'], "   Patterns: ", pattern_names)
 
 
 def main():
+   
+    scoring_models = train_scoring_pattern(pattern_names=('P_B13',), labelled_amounts=range(16, 17), sample_selection='negatives_with_none',
+       model_name='roberta-base', train_domains=['rest'], test_domains=['lap'],
+       masking_strategy='aspect_scoring', max_steps=5, test_limit=5)
+
+    eval(scoring_models)
+
 #    create_asp_only_data_files("rest/asp+op/res_all.json", "rest/asp/res_all.json") 
 
-   #eval_pretrained()
-   
-   train_scoring_pattern(pattern_names=('P_B13',), labelled_amounts=range(16, 17), sample_selection='negatives_with_none',
-       model_name='roberta-base', train_domains=['rest'], test_domains=['lap'],
-       masking_strategy='aspect_scoring')#, max_steps=5, test_limit=5)    
+
+    # scoring_models = ['scoring_P_B13_rest_100']
+    #scoring_models = ['scoring_P_B15_rest_16']
+    #scoring_models = ['scoring_P_B12_lap_100']
+    #scoring_models = ['scoring_P_B14_lap_100']
+    #scoring_models = (['scoring_P_B12_rest_16', 'scoring_P_B13_rest_16','scoring_P_B14_rest_16','scoring_P_B15_rest_16'])
+    #scoring_models = (['scoring_P_B12_rest_100', 'scoring_P_B13_rest_100', 'scoring_P_B14_rest_100'])
+    #scoring_models = (['scoring_P_B12_rest_100'])
+
 
 if __name__ == "__main__":
     main()

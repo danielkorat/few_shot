@@ -197,7 +197,7 @@ def run_example(text, tokens, top_k=10, thresh=-1, target=True, **kwargs):
     return preds, valid_preds, pred_bio, preds_meta, hparams
 
 
-def eval_ds(ds_dict, test_domain, pattern_names, model_names,scoring_model_names=None,
+def eval_ds(ds_dict, test_domain, pattern_names, model_names, scoring_model_names=None,
         scoring_patterns=None, test_limit=None, **kwargs):
 
     test_data = ds_dict[test_domain]['test'][:test_limit]
