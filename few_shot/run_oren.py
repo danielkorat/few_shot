@@ -2,7 +2,7 @@ from patterns import ROOT
 from utils import load_all_datasets, evaluate, create_mlm_train_sets, plot_few_shot, PATTERNS, SCORING_PATTERNS, eval_ds, create_asp_only_data_files
 from run_pattern_mlm import main as run_pattern_mlm
 import os
-import pickle
+
 
 def pattern_mlm_preprocess(labelled_amounts, **kwargs):
     datasets = load_all_datasets()
@@ -14,7 +14,6 @@ def pattern_mlm_preprocess(labelled_amounts, **kwargs):
         res[num_labelled] = amounts
     return res
      
-
      
 def train_mlm(train_domain, num_labelled, pattern_name, seed=42, lr=1e-05, max_seq=256, max_steps=1000, batch_size=16,
             validation=None, model_type='roberta', model_name='roberta-base', **kwargs):
@@ -58,7 +57,6 @@ def train_mlm(train_domain, num_labelled, pattern_name, seed=42, lr=1e-05, max_s
     return output_dir, hparams
 
 
-
 def train_scoring_pattern(labelled_amounts, **kwargs):
     actual_num_labelled = pattern_mlm_preprocess(labelled_amounts, **kwargs)
     print("actual_num_labelled: ",actual_num_labelled) 
@@ -67,6 +65,7 @@ def train_scoring_pattern(labelled_amounts, **kwargs):
             print(f"\n{'-' * 50}\n\t\t  Num. Labelled: {num_labelled}\n{'-' * 50}")
             p_mlm_model, hparams = train_mlm(train_domain, num_labelled, pattern_name=kwargs['pattern_names'][0], **kwargs)    
             print("Finished model training")
+
 
 def eval_pretrained():
     pattern_kwargs = dict(pattern='P5', top_k=10, step_1_nouns_only=True)
@@ -94,15 +93,13 @@ def eval_pretrained():
 
 
 def main():
-
-    
-   create_asp_only_data_files("rest/asp+op/res_all.json", "rest/asp/res_all.json") 
+#    create_asp_only_data_files("rest/asp+op/res_all.json", "rest/asp/res_all.json") 
 
    #eval_pretrained()
    
-   # train_scoring_pattern(pattern_names=('P_B13',), labelled_amounts=range(16, 17), sample_selection='negatives_with_none',
-   #     model_name='roberta-base', train_domains=['rest'], test_domains=['lap'],
-   #     masking_strategy='aspect_scoring')#, max_steps=5, test_limit=5)    
+   train_scoring_pattern(pattern_names=('P_B13',), labelled_amounts=range(16, 17), sample_selection='negatives_with_none',
+       model_name='roberta-base', train_domains=['rest'], test_domains=['lap'],
+       masking_strategy='aspect_scoring')#, max_steps=5, test_limit=5)    
 
 if __name__ == "__main__":
     main()

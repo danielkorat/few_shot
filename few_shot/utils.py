@@ -120,11 +120,8 @@ def our_eval_metrics(gold, preds, verbose=False, **kwargs):
         len_g = len(gold)
         for i in enumerate(len_g)-1:
             if p(i) == "B-ASP" and g(i) == "B-ASP" and p(i+1) == "O" and g(i+1) == "O":
-                TP = TP+1
+                TP += 1
                 
-
-
-    
     if verbose:
         print(f'{domain}')
         print(f'F1: {round(F, 3):.3f}, P: {P:.3f}, R: {R:.3f}, {conf}')
@@ -376,7 +373,7 @@ def create_mlm_train_sets(datasets, num_labelled, sample_selection, pattern_name
                 P = apply_pattern(SCORING_PATTERNS[pattern_name])
             
             train_samples = datasets[train_domain]['train']
-            exper_str = f"{train_domain}_{pattern_name}_{num_labelled}_{sample_selection}"
+            exper_str = f"{train_domain}_train_{num_labelled}_{pattern_name}"
             out_path = ROOT / 'mlm_data' / f'{exper_str}.txt'
 
             args = train_samples, out_path, P
