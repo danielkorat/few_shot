@@ -33,14 +33,13 @@ def train_mlm(train_domain, num_labelled, pattern_name, seed=42, lr=1e-05, max_s
 
     os.environ["TOKENIZERS_PARALLELISM"] = 'false'
 
-    pattern = SCORING_PATTERNS[pattern_name] if pattern_name.startswith('P_B') else PATTERNS[pattern_name]
-
     # if pattern_name.startswith('P_B'):
     #     pattern = SCORING_PATTERNS[pattern_name]
     # else:
     #     pattern = PATTERNS[pattern_name]
     run_pattern_mlm([
-    "--pattern", pattern,
+    "--pattern", pattern_name,
+     "--model_cls", "RobertaForMLMWithCE",
     "--seed", str(seed),
     # "--num_train_epochs", "1",
     "--learning_rate", str(lr),
@@ -58,8 +57,9 @@ def train_mlm(train_domain, num_labelled, pattern_name, seed=42, lr=1e-05, max_s
 
 
 def train_scoring_pattern(labelled_amounts, **kwargs):
-    actual_num_labelled = pattern_mlm_preprocess(labelled_amounts, **kwargs)
-    print("actual_num_labelled: ",actual_num_labelled)
+
+    actual_num_labelled = pattern_mlm_preprocess(labelled_amounts,  **kwargs)
+    print("actual_num_labelled: ", actual_num_labelled)
     trained_models = []
     for train_domain in kwargs['train_domains']:
         for num_labelled in labelled_amounts:
@@ -91,14 +91,13 @@ def eval(scoring_models):
 
 def main():
    
-    scoring_models = train_scoring_pattern(pattern_names=('P_B13',), labelled_amounts=range(16, 17), sample_selection='negatives_with_none',
+    scoring_models = train_scoring_pattern(pattern_names=('P_B13',), labelled_amounts=range(64, 65), sample_selection='negatives_with_none',
        model_name='roberta-base', train_domains=['rest'], test_domains=['lap'],
        masking_strategy='aspect_scoring', max_steps=5, test_limit=5)
 
     eval(scoring_models)
 
 #    create_asp_only_data_files("rest/asp+op/res_all.json", "rest/asp/res_all.json") 
-
 
     # scoring_models = ['scoring_P_B13_rest_100']
     #scoring_models = ['scoring_P_B15_rest_16']
@@ -112,6 +111,3 @@ def main():
 if __name__ == "__main__":
     main()
     #plot_few_shot('lap', *pickle.load(open(f'lap_plot_data.pkl', 'rb')), "dfgdf")
-
-
-

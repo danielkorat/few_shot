@@ -29,7 +29,8 @@ from typing import Optional
 
 from datasets import load_dataset
 
-from modeling import STRING_TO_MODEL_CLS
+from modeling import P_B_13, STR_TO_MODEL_CLS
+from patterns import SCORING_PATTERNS, PATTERNS
 
 import transformers
 from transformers import (
@@ -42,7 +43,6 @@ from transformers import (
     Trainer,
     TrainingArguments,
     set_seed,
-    PreTrainedModel,
 )
 from transformers.trainer_utils import get_last_checkpoint, is_main_process
 
@@ -300,8 +300,9 @@ def main(args):
             "You can do it from another script, save it, and load it from here, using --tokenizer_name."
         )
 
-    if model_args.model_cls:
-        model_cls = STRING_TO_MODEL_CLS[model_args.model_cls]
+    if model_args.model_cls or model_args.model_name_or_path:
+        model_cls = STR_TO_MODEL_CLS[model_args.model_cls] if model_args.model_cls else AutoModelForMaskedLM
+
         model = model_cls.from_pretrained(
                     model_args.model_name_or_path,
                     from_tf=bool(".ckpt" in model_args.model_name_or_path),
@@ -311,15 +312,8 @@ def main(args):
                     use_auth_token=True if model_args.use_auth_token else None,
                 )
 
-    elif model_args.model_name_or_path:
-        model = AutoModelForMaskedLM.from_pretrained(
-            model_args.model_name_or_path,
-            from_tf=bool(".ckpt" in model_args.model_name_or_path),
-            config=config,
-            cache_dir=model_args.cache_dir,
-            revision=model_args.model_revision,
-            use_auth_token=True if model_args.use_auth_token else None,
-        )
+        if model_args.model_cls:
+            model.set_pvp(P_B_13(tokenizer))
     else:
         logger.info("Training new model from scratch")
         model = AutoModelForMaskedLM.from_config(config)
@@ -336,14 +330,22 @@ def main(args):
 
     if data_args.line_by_line:
         # When using line_by_line, we just tokenize each nonempty line.
-        padding = "max_length" if data_args.pad_to_max_length else False
 
-        def tokenize_function(examples):
-            # Remove empty lines
-            examples["text"] = [line for line in examples["text"] if len(line) > 0 and not line.isspace()]
-            return tokenizer(
+        def feature_extraction_function(examples):
+            texts, scoring_labels, label_indices = [], [], []
+            for line in examples["text"]:
+                # Remove empty lines
+                if len(line) > 0 and not line.isspace():
+                    if pattern_args.pattern in SCORING_PATTERNS:
+                        line, label_id, label_idx = line.split('#')
+                        scoring_labels.append(int(label_id))
+                        label_indices.append(int(label_idx))
+                    texts.append(line)
+
+            examples["text"] = texts
+            features = tokenizer(
                 examples["text"],
-                padding=padding,
+                padding="max_length",
                 truncation=True,
                 max_length=data_args.max_seq_length,
                 # We use this option because DataCollatorForLanguageModeling (see below) is more efficient when it
@@ -351,77 +353,34 @@ def main(args):
                 return_special_tokens_mask=True,
             )
 
+            if pattern_args.pattern in SCORING_PATTERNS:
+                features['scoring_labels'] = scoring_labels
+
+                mask_positions = []
+                for input_ids, label_idx in zip(features['input_ids'], label_indices):
+                    labels = [-1] * len(input_ids)
+                    labels[label_idx] = 1
+                    mask_positions.append(labels)
+
+                features['mask_positions'] = mask_positions
+
+            assert len({len(e) for e in features.values()}) == 1
+            return features
+
         tokenized_datasets = datasets.map(
-            tokenize_function,
+            feature_extraction_function,
             batched=True,
             num_proc=data_args.preprocessing_num_workers,
             remove_columns=[text_column_name],
             load_from_cache_file=not data_args.overwrite_cache,
         )
     else:
-        # Otherwise, we tokenize every text, then concatenate them together before splitting them in smaller parts.
-        # We use `return_special_tokens_mask=True` because DataCollatorForLanguageModeling (see below) is more
-        # efficient when it receives the `special_tokens_mask`.
-        def tokenize_function(examples):
-            return tokenizer(examples[text_column_name], return_special_tokens_mask=True)
-
-        tokenized_datasets = datasets.map(
-            tokenize_function,
-            batched=True,
-            num_proc=data_args.preprocessing_num_workers,
-            remove_columns=column_names,
-            load_from_cache_file=not data_args.overwrite_cache,
-        )
-
-        if data_args.max_seq_length is None:
-            max_seq_length = tokenizer.model_max_length
-            if max_seq_length > 1024:
-                logger.warn(
-                    f"The tokenizer picked seems to have a very large `model_max_length` ({tokenizer.model_max_length}). "
-                    "Picking 1024 instead. You can change that default value by passing --max_seq_length xxx."
-                )
-                max_seq_length = 1024
-        else:
-            if data_args.max_seq_length > tokenizer.model_max_length:
-                logger.warn(
-                    f"The max_seq_length passed ({data_args.max_seq_length}) is larger than the maximum length for the"
-                    f"model ({tokenizer.model_max_length}). Using max_seq_length={tokenizer.model_max_length}."
-                )
-            max_seq_length = min(data_args.max_seq_length, tokenizer.model_max_length)
-
-        # Main data processing function that will concatenate all texts from our dataset and generate chunks of
-        # max_seq_length.
-        def group_texts(examples):
-            # Concatenate all texts.
-            concatenated_examples = {k: sum(examples[k], []) for k in examples.keys()}
-            total_length = len(concatenated_examples[list(examples.keys())[0]])
-            # We drop the small remainder, we could add padding if the model supported it instead of this drop, you can
-            # customize this part to your needs.
-            total_length = (total_length // max_seq_length) * max_seq_length
-            # Split by chunks of max_len.
-            result = {
-                k: [t[i : i + max_seq_length] for i in range(0, total_length, max_seq_length)]
-                for k, t in concatenated_examples.items()
-            }
-            return result
-
-        # Note that with `batched=True`, this map processes 1,000 texts together, so group_texts throws away a
-        # remainder for each of those groups of 1,000 texts. You can adjust that batch_size here but a higher value
-        # might be slower to preprocess.
-        #
-        # To speed up this part, we use multiprocessing. See the documentation of the map method for more information:
-        # https://huggingface.co/docs/datasets/package_reference/main_classes.html#datasets.Dataset.map
-        tokenized_datasets = tokenized_datasets.map(
-            group_texts,
-            batched=True,
-            num_proc=data_args.preprocessing_num_workers,
-            load_from_cache_file=not data_args.overwrite_cache,
-        )
+        raise NotImplementedError
 
     # Data collator
     # This one will take care of randomly masking the tokens.
     data_collator = DataCollatorForPatternLanguageModeling(
-        pattern=pattern_args.pattern,
+        pattern = SCORING_PATTERNS[pattern_args.pattern] if pattern_args.pattern.startswith('P_B') else PATTERNS[pattern_args.pattern],
         tokenizer=tokenizer, 
         mlm_probability=data_args.mlm_probability)
 
