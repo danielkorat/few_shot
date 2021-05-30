@@ -113,6 +113,12 @@ class ModelArguments:
             "with private models)."
         },
     )
+    alpha: float = field(
+        default=1e-4,
+        metadata={
+            "help": "alpha value for CE loss."
+        },
+    )
 
 
 @dataclass
@@ -313,7 +319,7 @@ def main(args):
                 )
 
         if model_args.model_cls:
-            model.set_pvp(P_B_13(tokenizer))
+            model.set_attrs(pvp=P_B_13(tokenizer), alpha=model_args.alpha)
     else:
         logger.info("Training new model from scratch")
         model = AutoModelForMaskedLM.from_config(config)

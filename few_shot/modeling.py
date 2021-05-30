@@ -79,8 +79,9 @@ def get_verbalization_ids(word: str, tokenizer, force_single_token: bool):
     return verbalization_id
 
 class RobertaForMLMWithCE(RobertaForMaskedLM):
-    def set_pvp(self, pvp):
+    def set_attrs(self, pvp, alpha):
         self.pvp = pvp
+        self.alpha = alpha
 
     def forward(
         self,
@@ -138,15 +139,14 @@ class RobertaForMLMWithCE(RobertaForMaskedLM):
             masked_lm_loss = loss_fct(prediction_scores.view(-1, self.config.vocab_size), labels.view(-1))
 
         # FINAL LOSS
-        alpha = 1e-4
-        loss = (1 - alpha) * label_loss + alpha * masked_lm_loss
+        loss = (1 - self.alpha) * label_loss + self.alpha * masked_lm_loss
 
         if not return_dict:
             output = (prediction_scores,) + outputs[2:]
             return ((masked_lm_loss,) + output) if masked_lm_loss is not None else output
 
         return MaskedLMOutput(
-            loss=masked_lm_loss,
+            loss=loss,
             logits=prediction_scores,
             hidden_states=outputs.hidden_states,
             attentions=outputs.attentions,

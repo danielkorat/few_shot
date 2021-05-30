@@ -15,7 +15,7 @@ def pattern_mlm_preprocess(labelled_amounts, **kwargs):
     return res
      
      
-def train_mlm(train_domain, num_labelled, pattern_name, seed=42, lr=1e-05, max_seq=256, max_steps=1000, batch_size=16,
+def train_mlm(train_domain, num_labelled, pattern_name, alpha, seed=42, lr=1e-05, max_seq=256, max_steps=1000, batch_size=16,
             validation=None, model_type='roberta', model_name='roberta-base', **kwargs):
     hparams = locals()
     for v in 'train_domain', 'num_labelled', 'kwargs':
@@ -39,7 +39,8 @@ def train_mlm(train_domain, num_labelled, pattern_name, seed=42, lr=1e-05, max_s
     #     pattern = PATTERNS[pattern_name]
     run_pattern_mlm([
     "--pattern", pattern_name,
-     "--model_cls", "RobertaForMLMWithCE",
+    "--model_cls", "RobertaForMLMWithCE",
+    "--alpha", str(alpha),
     "--seed", str(seed),
     # "--num_train_epochs", "1",
     "--learning_rate", str(lr),
@@ -92,8 +93,8 @@ def eval(scoring_models):
 def main():
    
     scoring_models = train_scoring_pattern(pattern_names=('P_B13',), labelled_amounts=range(64, 65), sample_selection='negatives_with_none',
-       model_name='roberta-base', train_domains=['rest'], test_domains=['lap'],
-       masking_strategy='aspect_scoring', max_steps=5, test_limit=5)
+       model_name='roberta-base', train_domains=['rest'], test_domains=['rest'],
+       masking_strategy='aspect_scoring', alpha=0.8) #, max_steps=5, test_limit=5)
 
     eval(scoring_models)
 
