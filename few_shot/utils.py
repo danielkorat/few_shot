@@ -7,6 +7,9 @@ from numpy.lib.shape_base import hsplit
 from transformers import pipeline
 from seqeval.metrics import f1_score, precision_score, recall_score,\
                             performance_measure
+from seqeval.metrics.sequence_labeling import get_entities
+from collections import defaultdict
+from torch import tensor
 import csv, json, pickle, spacy, requests, logging
 import pandas as pd
 from urllib.request import urlopen
@@ -113,14 +116,14 @@ def eval_metrics(gold, preds, domain, verbose=False, **kwargs):
 
     return {'Precision': round(P,3), 'Recall': round(R,3), 'F1': round(F,3)}
 
-def our_eval_metrics(gold, preds, verbose=False, **kwargs):
+# def our_eval_metrics(gold, preds, verbose=False, **kwargs):
 
-    TP, FP, FN = 0, 0, 0
-    for g, p in zip(gold, preds):
-        len_g = len(gold)
-        for i in enumerate(len_g)-1:
-            if p(i) == "B-ASP" and g(i) == "B-ASP" and p(i+1) == "O" and g(i+1) == "O":
-                TP = TP+1
+#     TP, FP, FN = 0, 0, 0
+#     for g, p in zip(gold, preds):
+#         len_g = len(gold)
+#         for i in enumerate(len_g)-1:
+#             if p(i) == "B-ASP" and g(i) == "B-ASP" and p(i+1) == "O" and g(i+1) == "O":
+#                 TP = TP+1
                 
 
 
@@ -470,7 +473,6 @@ def plot_few_shot(train_domain, test_domains, plot_data, train_hparams={}, actua
 
 def create_asp_only_data_files(in_file_name, out_file_name):
    
-    
     full_in_file_name = ROOT / "data" / in_file_name
     lines = []
     for line in open(full_in_file_name, 'r'):
@@ -485,3 +487,49 @@ def create_asp_only_data_files(in_file_name, out_file_name):
             '\n'.join(json.dumps(i) for i in lines))
 
         #json.dump((lines), f, indent=2)
+
+def detailed_metrics(y_gold, y_pred):
+    """Calculate the main classification metrics for every label type.
+
+    Args:
+        y_gold: 2d array. Ground truth (correct) target values.
+        y_pred: 2d array. Estimated targets as returned by a classifier.
+        digits: int. Number of digits for formatting output floating point values.
+
+    Returns:
+        type_metrics: dict of label types and their metrics.
+        macro_avg: dict of weighted macro averages for all metrics across label types.
+    """
+    gold_entities = set(get_entities(y_gold))
+    pred_entities = set(get_entities(y_pred))
+    d1 = defaultdict(set)
+    d2 = defaultdict(set)
+    for e in gold_entities:
+        d1[e[0]].add((e[1], e[2]))
+    for e in pred_entities:
+        d2[e[0]].add((e[1], e[2]))
+
+    metrics = {}
+    ps, rs, f1s, s = [], [], [], []
+    for type_name, gold_entities in d1.items():
+        pred_entities = d2[type_name]
+        nb_correct = len(gold_entities & pred_entities)
+        nb_pred = len(pred_entities)
+        nb_true = len(gold_entities)
+        p = nb_correct / nb_pred if nb_pred > 0 else 0
+        r = nb_correct / nb_true if nb_true > 0 else 0
+        f1 = 2 * p * r / (p + r) if p + r > 0 else 0
+
+        metrics[type_name.lower() + '_precision'] = round(p,3)
+        metrics[type_name.lower() + '_recall'] = round(r,3)
+        metrics[type_name.lower() + '_f1'] = round(f1,3)
+
+        ps.append(p)
+        rs.append(r)
+        f1s.append(f1)
+        s.append(nb_true)
+    macro_avg = {'macro_precision': round(np.average(ps, weights=s),3),
+                 'macro_recall': round(np.average(rs, weights=s),3),
+                 'macro_f1': round(np.average(f1s, weights=s),3)}
+    
+    return metrics, macro_avg
