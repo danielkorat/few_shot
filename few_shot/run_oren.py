@@ -2,7 +2,8 @@ from patterns import ROOT
 from utils import load_all_datasets, evaluate, create_mlm_train_sets, plot_few_shot, PATTERNS, SCORING_PATTERNS, eval_ds, create_asp_only_data_files
 from run_pattern_mlm import main as run_pattern_mlm
 import os
-
+from itertools import product
+from datetime import datetime
 
 def pattern_mlm_preprocess(labelled_amounts, **kwargs):
     datasets = load_all_datasets()
@@ -29,7 +30,7 @@ def train_mlm(train_domain, num_labelled, pattern_name, alpha, seed=42, lr=1e-05
     # hparams used in PET: 
     # lr", "1x10^-5, batch_size", "16, max_len", "256, steps", "1000
     # every batch: 4 labelled + 12 unlabelled
-    os.environ["CUDA_VISIBLE_DEVICES"] = "2,3"
+    # os.environ["CUDA_VISIBLE_DEVICES"] = "2,3"
 
     os.environ["TOKENIZERS_PARALLELISM"] = 'false'
 
@@ -71,7 +72,7 @@ def train_scoring_pattern(labelled_amounts, **kwargs):
     return trained_models
 
 
-def eval(scoring_models):
+def eval(scoring_models, test_domain, scoring_pattern, pattern):
     pattern_kwargs = dict(pattern='P5', top_k=10, step_1_nouns_only=True)
     data = load_all_datasets(train_size=2200)
     model_names=['roberta-base']
@@ -79,24 +80,41 @@ def eval(scoring_models):
     #pattern_groups=(['P1','P2'], ['P1','P2','P3'], ['P1','P2','P3','P4'],['P1','P2','P3','P4','P5'],['P1','P2','P3','P4','P5','P6'],
     # ['P1','P2','P3','P4','P5','P6','P7'],['P1','P2','P3','P4','P5','P6','P7','P8'])
     #pattern_groups=(['P1','P2'],['P1','P2','P3'])
-    pattern_groups=(['P1'],)
-    scoring_patterns=(['P_B13'])
-    test_domain='rest'
+    pattern_groups=([pattern],)
+    scoring_patterns=([scoring_pattern])
     
     #scoring_patterns=None
     for pattern_names in pattern_groups:
         eval_results = eval_ds(data, test_domain=test_domain, pattern_names=pattern_names, model_names=model_names, scoring_model_names=scoring_models, 
             scoring_patterns=scoring_patterns, **pattern_kwargs)
         print("Stats:", eval_results['metrics'], "   Patterns: ", pattern_names)
+    return eval_results['metrics']
 
+def main(smoke):
+    if smoke:
+        alphas, domains, labelled_amounts = [0], ['rest', 'lap'], [16]
+        kwargs = dict(max_steps=5, test_limit=5)
+    else:
+        alphas = [0, .2, .4, .6, .8, 1]
+        domains = ['rest', 'lap']
+        labelled_amounts = [16, 32, 64, 100]
+        kwargs = {}
 
-def main():
-   
-    scoring_models = train_scoring_pattern(pattern_names=('P_B13',), labelled_amounts=range(64, 65), sample_selection='negatives_with_none',
-       model_name='roberta-base', train_domains=['rest'], test_domains=['rest'],
-       masking_strategy='aspect_scoring', alpha=0.8) #, max_steps=5, test_limit=5)
+    scoring_pattern = 'P_B13'
+    pattern = 'P1'
+    timestamp = datetime.now().strftime("%Y_%m_%d-%I:%M")
 
-    eval(scoring_models)
+    for domain, alpha, labelled_amount in product(domains, alphas, labelled_amounts):
+        scoring_models = train_scoring_pattern(pattern_names=(scoring_pattern,), 
+            labelled_amounts=[labelled_amount], sample_selection='negatives_with_none',
+            model_name='roberta-base', train_domains=[domain], test_domains=[domain],
+            masking_strategy='aspect_scoring', alpha=alpha, **kwargs)
+
+        res = eval(scoring_models, domain, scoring_pattern, pattern)
+
+        with open(f'results_{timestamp}.txt', 'a') as f:
+            f.write(f"domain: {domain}, alpha: {alpha}, labelled_amount: {labelled_amount}\n{res}\n\n")
+
 
 #    create_asp_only_data_files("rest/asp+op/res_all.json", "rest/asp/res_all.json") 
 
@@ -110,5 +128,5 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    main(smoke=False)
     #plot_few_shot('lap', *pickle.load(open(f'lap_plot_data.pkl', 'rb')), "dfgdf")

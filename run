@@ -1,0 +1,1 @@
+nohup python /home/daniel_nlp/few_shot/few_shot/run_oren.py  > exper.log 2>&1 &

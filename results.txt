@@ -1,0 +1,12 @@
+domain: rest, alpha: 0, labelled_amount: 16:
+{'Precision': 0.331, 'Recall': 0.977, 'F1': 0.494}
+
+domain: lap, alpha: 0, labelled_amount: 16:
+{'Precision': 0.0, 'Recall': 0.0, 'F1': 0.0}
+
+domain: rest, alpha: 0, labelled_amount: 16
+{'Precision': 0.331, 'Recall': 0.977, 'F1': 0.494}
+
+domain: lap, alpha: 0, labelled_amount: 16
+{'Precision': 0.0, 'Recall': 0.0, 'F1': 0.0}
+
