@@ -1,10 +1,11 @@
+from numpy.lib.twodim_base import mask_indices
 from spacy import tokens
 from patterns import ROOT
 from os import makedirs
 import os
 from numpy.core.fromnumeric import nonzero
 from numpy.lib.shape_base import hsplit
-from transformers import pipeline
+from transformers import pipeline, AutoTokenizer
 from seqeval.metrics import f1_score, precision_score, recall_score,\
                             performance_measure
 from seqeval.metrics.sequence_labeling import get_entities
@@ -118,16 +119,13 @@ def eval_metrics(gold, preds, domain, verbose=False, **kwargs):
 
 # def our_eval_metrics(gold, preds, verbose=False, **kwargs):
 
-#     TP, FP, FN = 0, 0, 0
-#     for g, p in zip(gold, preds):
-#         len_g = len(gold)
-#         for i in enumerate(len_g)-1:
-#             if p(i) == "B-ASP" and g(i) == "B-ASP" and p(i+1) == "O" and g(i+1) == "O":
-#                 TP = TP+1
+    TP, FP, FN = 0, 0, 0
+    for g, p in zip(gold, preds):
+        len_g = len(gold)
+        for i in enumerate(len_g)-1:
+            if p(i) == "B-ASP" and g(i) == "B-ASP" and p(i+1) == "O" and g(i+1) == "O":
+                TP += 1
                 
-
-
-    
     if verbose:
         print(f'{domain}')
         print(f'F1: {round(F, 3):.3f}, P: {P:.3f}, R: {R:.3f}, {conf}')
@@ -203,7 +201,7 @@ def run_example(text, tokens, top_k=10, thresh=-1, target=True, **kwargs):
     return preds, valid_preds, pred_bio, preds_meta, hparams
 
 
-def eval_ds(ds_dict, test_domain, pattern_names, model_names,scoring_model_names=None,
+def eval_ds(ds_dict, test_domain, pattern_names, model_names, scoring_model_names=None,
         scoring_patterns=None, test_limit=None, **kwargs):
 
     test_data = ds_dict[test_domain]['test'][:test_limit]
@@ -355,19 +353,27 @@ def replace_mask(train_samples, path, P, none_replacement=None, limit=None, requ
 
     return {'unique': unique_count, 'total': count}
 
-def replace_mask_scoring_pattern(f, P, x, replace_aspects, replace_mask_token):
+def get_mask_positions(tokenizer, text):
+    input_ids = tokenizer(text)['input_ids']
+    label_idx = input_ids.index(tokenizer.mask_token_id)
+    return label_idx
+
+def replace_mask_scoring_pattern(f, P, x, replace_aspects, replace_mask_token, append_label_id=None, tokenizer=None):
     count, unique_count = 0, 0
     unique_count += 1
     P_x = P(x)
-    
+
     for replace_asp in replace_aspects:
         count += 1
-        pattern = P_x.replace('<aspect>', replace_asp)
-        line = pattern.replace('<mask>', replace_mask_token) + '\n'
-        f.write(line)
-    return unique_count, count    
+        example = P_x.replace('<aspect>', replace_asp)
+        mask_idx = get_mask_positions(tokenizer, example)
+        example = example.replace('<mask>', replace_mask_token)
+        if append_label_id:
+            line = '#'.join([example, append_label_id, str(mask_idx)])
+        f.write(line + '\n')
+    return unique_count, count
 
-def create_mlm_train_sets(datasets, num_labelled, sample_selection, pattern_names, train_domains, masking_strategy, **kwargs):
+def create_mlm_train_sets(datasets, num_labelled, sample_selection, pattern_names, train_domains, masking_strategy, model_name, **kwargs):
     actual_num_labelled = {}
     makedirs(ROOT / 'mlm_data', exist_ok=True)
     
@@ -379,7 +385,7 @@ def create_mlm_train_sets(datasets, num_labelled, sample_selection, pattern_name
                 P = apply_pattern(SCORING_PATTERNS[pattern_name])
             
             train_samples = datasets[train_domain]['train']
-            exper_str = f"{train_domain}_{pattern_name}_{num_labelled}_{sample_selection}"
+            exper_str = f"{train_domain}_train_{num_labelled}_{pattern_name}"
             out_path = ROOT / 'mlm_data' / f'{exper_str}.txt'
 
             args = train_samples, out_path, P
@@ -399,20 +405,22 @@ def create_mlm_train_sets(datasets, num_labelled, sample_selection, pattern_name
                         limit=num_labelled, require_aspects=False)
 
             if masking_strategy == 'aspect_scoring': 
-                counts=0
+                counts = 0
+                tokenizer = AutoTokenizer.from_pretrained(model_name, use_fast=True)
+
                 with open(out_path, 'w') as f:            
                     #for txt, *_, gold_aspects in train_samples[:num_labelled]:
                     for txt, tokens, _ , gold_aspects in train_samples[:num_labelled]:    
                         # create positive examples
                         replace_mask_scoring_pattern(f, P, txt, \
-                            replace_aspects=gold_aspects, replace_mask_token='Yes')
+                            replace_aspects=gold_aspects, replace_mask_token='Yes', append_label_id='1', tokenizer=tokenizer)
                         # create negative examples: extract non-aspect nouns     
                         nouns = [ent.text for ent in spacy_model(tokens) if ent.pos_ == 'NOUN' or ent.pos_ =='PROPN']
                         #nouns = [ent.text for ent in spacy_model(txt) if ent.pos_ == 'NOUN' or ent.pos_ =='PROPN']
                         non_asps = [x for x in nouns if x not in gold_aspects] 
                         if non_asps:
                             replace_mask_scoring_pattern(f, P, txt, \
-                                replace_aspects=non_asps, replace_mask_token='No') 
+                                replace_aspects=non_asps, replace_mask_token='No', append_label_id='0', tokenizer=tokenizer) 
 
         actual_num_labelled[train_domain] = counts                                 
 

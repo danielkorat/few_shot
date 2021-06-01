@@ -42,8 +42,6 @@ def get_fm_pipeline(model_name):
         fm_pipeline = MODELS_DICT[model_name]
     else:
         fine_tuned = 'rest_' in model_name or 'lap_' in model_name
-        if fine_tuned:
-            model_name = f"models/{model_name}"
 
         print(f"\nLoading {model_name} fill-mask pipeline...\n")
         stdout.flush()

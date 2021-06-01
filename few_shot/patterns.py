@@ -1,5 +1,7 @@
 import pathlib
 
+from numpy.lib.twodim_base import mask_indices
+
 ROOT = pathlib.Path(__file__).parent.parent.absolute()
 
 

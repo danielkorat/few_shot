@@ -7,7 +7,82 @@ from transformers import RobertaForMaskedLM
 from transformers.modeling_outputs import MaskedLMOutput
 from torch.nn import CrossEntropyLoss
 
+class P_B_13:
+    VERBALIZER = {
+        "0": ["No"],
+        "1": ["Yes"]
+    } 
+
+    @property
+    def max_num_verbalizers(self) -> int:
+        """Return the maximum number of verbalizers across all labels"""
+        return max(len(self.verbalize(label)) for label in self.label_list)
+
+    def __init__(self, tokenizer) -> None:
+        self.label_list = ["0", "1"]
+        self.tokenizer = tokenizer
+        self.mlm_logits_to_cls_logits_tensor = self._build_mlm_logits_to_cls_logits_tensor()
+
+    def _build_mlm_logits_to_cls_logits_tensor(self):
+        label_list = self.label_list
+        m2c_tensor = torch.ones([len(label_list), self.max_num_verbalizers], dtype=torch.long) * -1
+
+        for label_idx, label in enumerate(label_list):
+            verbalizers = self.verbalize(label)
+            for verbalizer_idx, verbalizer in enumerate(verbalizers):
+                verbalizer_id = get_verbalization_ids(verbalizer, self.tokenizer, force_single_token=True)
+                assert verbalizer_id != self.tokenizer.unk_token_id, "verbalization was tokenized as <UNK>"
+                m2c_tensor[label_idx, verbalizer_idx] = verbalizer_id
+        return m2c_tensor
+
+    def verbalize(self, label):
+        return P_B_13.VERBALIZER[label]
+
+    def convert_mlm_logits_to_cls_logits(self, mlm_labels: torch.Tensor, logits: torch.Tensor) -> torch.Tensor:
+        masked_logits = logits[mlm_labels >= 0]
+        cls_logits = torch.stack([self._convert_single_mlm_logits_to_cls_logits(ml) for ml in masked_logits])
+        return cls_logits
+
+    def _convert_single_mlm_logits_to_cls_logits(self, logits: torch.Tensor) -> torch.Tensor:
+        m2c = self.mlm_logits_to_cls_logits_tensor.to(logits.device)
+        # filler_len.shape() == max_fillers
+        filler_len = torch.tensor([len(self.verbalize(label)) for label in self.label_list],
+                                    dtype=torch.float)
+        filler_len = filler_len.to(logits.device)
+
+        cls_logits = logits[torch.max(torch.zeros_like(m2c), m2c)]
+        cls_logits = cls_logits * (m2c > 0).float()
+
+        cls_logits = cls_logits.sum(axis=1) / filler_len
+        return cls_logits
+
+def get_verbalization_ids(word: str, tokenizer, force_single_token: bool):
+    """
+    Get the token ids corresponding to a verbalization
+
+    :param word: the verbalization
+    :param tokenizer: the tokenizer to use
+    :param force_single_token: whether it should be enforced that the verbalization corresponds to a single token.
+           If set to true, this method returns a single int instead of a list and throws an error if the word
+           corresponds to multiple tokens.
+    :return: either the list of token ids or the single token id corresponding to this word
+    """
+    # kwargs = {'add_prefix_space': True} if isinstance(tokenizer, GPT2Tokenizer) else {}
+    ids = tokenizer.encode(word, add_special_tokens=False)
+    if not force_single_token:
+        return ids
+    assert len(ids) == 1, \
+        f'Verbalization "{word}" does not correspond to a single token, got {tokenizer.convert_ids_to_tokens(ids)}'
+    verbalization_id = ids[0]
+    assert verbalization_id not in tokenizer.all_special_ids, \
+        f'Verbalization {word} is mapped to a special token {tokenizer.convert_ids_to_tokens(verbalization_id)}'
+    return verbalization_id
+
 class RobertaForMLMWithCE(RobertaForMaskedLM):
+    def set_attrs(self, pvp, alpha):
+        self.pvp = pvp
+        self.alpha = alpha
+
     def forward(
         self,
         input_ids=None,
@@ -22,6 +97,8 @@ class RobertaForMLMWithCE(RobertaForMaskedLM):
         output_attentions=None,
         output_hidden_states=None,
         return_dict=None,
+        scoring_labels=None,
+        mask_positions=None,
     ):
         r"""
         labels (:obj:`torch.LongTensor` of shape :obj:`(batch_size, sequence_length)`, `optional`):
@@ -49,23 +126,33 @@ class RobertaForMLMWithCE(RobertaForMaskedLM):
         sequence_output = outputs[0]
         prediction_scores = self.lm_head(sequence_output)
 
+        loss_fct = CrossEntropyLoss()
+
+        # LABEL LOSS
+        len_label_list = 2
+        scoring_logits = self.pvp.convert_mlm_logits_to_cls_logits(mask_positions, prediction_scores)
+        label_loss = loss_fct(scoring_logits.view(-1, len_label_list), scoring_labels.view(-1))
+
         masked_lm_loss = None
         if labels is not None:
-            loss_fct = CrossEntropyLoss()
+            # MLM LOSS
             masked_lm_loss = loss_fct(prediction_scores.view(-1, self.config.vocab_size), labels.view(-1))
+
+        # FINAL LOSS
+        loss = (1 - self.alpha) * label_loss + self.alpha * masked_lm_loss
 
         if not return_dict:
             output = (prediction_scores,) + outputs[2:]
             return ((masked_lm_loss,) + output) if masked_lm_loss is not None else output
 
         return MaskedLMOutput(
-            loss=masked_lm_loss,
+            loss=loss,
             logits=prediction_scores,
             hidden_states=outputs.hidden_states,
             attentions=outputs.attentions,
-        )    
+        )
 
-STRING_TO_MODEL_CLS = {'RobertaForMLMWithCE': RobertaForMLMWithCE}
+STR_TO_MODEL_CLS = {'RobertaForMLMWithCE': RobertaForMLMWithCE}
 
 @dataclass
 class DataCollatorForPatternLanguageModeling(DataCollatorForLanguageModeling):
