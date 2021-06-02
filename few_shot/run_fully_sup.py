@@ -27,7 +27,9 @@ from typing import Optional
 from argparse import ArgumentParser
 # from seqeval.metrics import f1_score, precision_score, recall_score,\
 #                             performance_measure
-from utils import eval_metrics
+from utils import eval_metrics 
+from utils import detailed_metrics
+
 import numpy as np
 from datasets import ClassLabel, load_dataset, load_metric
 
@@ -496,22 +498,24 @@ def train_and_eval_fully_sup(cmd_args_str):
             for prediction, label in zip(predictions, labels)
         ]
 
-        preds_bio_all = []
-        labels_bio_all = []
-        for prediction, label in zip(predictions, labels):
-            preds_bio_list = []
-            labels_bio_list = []
-            for (p, l) in zip(prediction, label):
-                if l != -100:
-                    pred_bio = label_list[p]
-                    preds_bio_list.append(pred_bio)
-                    label_bio = label_list[l]
-                    labels_bio_list.append(label_bio)
-            preds_bio_all.append(preds_bio_list)
-            labels_bio_all.append(labels_bio_list)
+        preds_bio_all, labels_bio_all = generate_bio(predictions, labels, label_list)
 
+        preds_bio_one_list=[]
+        for row in preds_bio_all:
+            for tag in row:
+                preds_bio_one_list.append(tag)
+
+        labels_bio_one_list=[]
+        for row in labels_bio_all:
+            for tag in row:
+                labels_bio_one_list.append(tag)        
+
+
+        eval_results, macro_avg = detailed_metrics(labels_bio_one_list, preds_bio_one_list)  
+
+        #print("eval_results: ", eval_results)
         #eval_results = eval_metrics(labels_bio_all, preds_bio_all, 'rest')
-        eval_results = our_eval_metrics(labels_bio_all, preds_bio_all)
+        #eval_results = our_eval_metrics(labels_bio_all, preds_bio_all)
 
         trainer.log_metrics("predict", metrics)
         trainer.save_metrics("predict", metrics)
@@ -537,6 +541,24 @@ def train_and_eval_fully_sup(cmd_args_str):
 
     return eval_results
 
+def generate_bio(predictions, labels, label_list):
+    preds_bio_all = []
+    labels_bio_all = []
+    for prediction, label in zip(predictions, labels):
+        preds_bio_list = []
+        labels_bio_list = []
+        for (p, l) in zip(prediction, label):
+            if l != -100:
+                pred_bio = label_list[p]
+                preds_bio_list.append(pred_bio)
+                label_bio = label_list[l]
+                labels_bio_list.append(label_bio)
+        preds_bio_all.append(preds_bio_list)
+        labels_bio_all.append(labels_bio_list)
+
+    return (preds_bio_all, labels_bio_all)
+
+
 def _mp_fn(index):
     # For xla_spawn (TPUs)
     main()
@@ -546,15 +568,16 @@ def main():
     
     model_name = 'bert-base-uncased'
     #model_name = 'roberta-base'
-    train_file = 'data/rest/asp/res_train_100.json'
+    train_file = 'data/rest/asp/res_train_32.json'
     #valid_file = 'data/rest/res_train_100.json'
-    test_file =  'data/rest/asp/res_train_100.json'
+    test_file =  'data/rest/asp/res_test_100.json'
 
 
     #cmd_args_str = ['--model_name_or_path', model_name, '--train_file', train_file, '--validation_file', valid_file, '--test_file', test_file, '--output_dir', 'models/full_sup', '--do_train', '--do_eval']
     cmd_args_str = ['--model_name_or_path', model_name, '--train_file', train_file, '--test_file', test_file, '--output_dir', 'models/full_sup', '--do_train', '--do_predict']
     
     eval_results = train_and_eval_fully_sup(cmd_args_str)
+    prec = float(eval_results['asp_precision'])
     print("FullySup stats:", eval_results, "   TrainingFile: ", train_file)
 
 if __name__ == "__main__":
