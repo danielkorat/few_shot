@@ -568,9 +568,9 @@ def main():
     
     model_name = 'bert-base-uncased'
     #model_name = 'roberta-base'
-    train_file = 'data/rest/asp/res_train_32.json'
+    train_file = 'data/rest/asp/res_train_4092.json'
     #valid_file = 'data/rest/res_train_100.json'
-    test_file =  'data/rest/asp/res_test_100.json'
+    test_file =  'data/rest/asp/res_test_4092.json'
 
 
     #cmd_args_str = ['--model_name_or_path', model_name, '--train_file', train_file, '--validation_file', valid_file, '--test_file', test_file, '--output_dir', 'models/full_sup', '--do_train', '--do_eval']

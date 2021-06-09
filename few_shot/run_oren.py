@@ -95,9 +95,12 @@ def main(smoke):
         alphas, domains, labelled_amounts = [0], ['rest', 'lap'], [16]
         kwargs = dict(max_steps=5, test_limit=5)
     else:
-        alphas = [0, .2, .4, .6, .8, 1]
-        domains = ['rest', 'lap']
-        labelled_amounts = [16, 32, 64, 100]
+        # alphas = [0, .2, .4, .6, .8, 1]
+        # domains = ['rest', 'lap']
+        # labelled_amounts = [16, 32, 64, 100]
+        alphas = [.6, ]
+        domains = ['rest']
+        labelled_amounts = [100]
         kwargs = {}
 
     scoring_pattern = 'P_B13'
