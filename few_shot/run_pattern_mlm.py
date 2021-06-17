@@ -342,8 +342,8 @@ def main(args):
             for line in examples["text"]:
                 # Remove empty lines
                 if len(line) > 0 and not line.isspace():
-                    if pattern_args.pattern in SCORING_PATTERNS:
-                        line, label_id, label_idx = line.split('#')
+                    if pattern_args.pattern in SCORING_PATTERNS:                        
+                        line, label_id, label_idx = line.split("#--#")
                         scoring_labels.append(int(label_id))
                         label_indices.append(int(label_idx))
                     texts.append(line)

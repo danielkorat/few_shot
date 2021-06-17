@@ -1,0 +1,3 @@
+domain: rest, scoring_pattern: P_B13, alpha: 0.6, train_size: 100, split: 1
+{'Precision': 0.4, 'Recall': 0.02, 'F1': 0.039}
+

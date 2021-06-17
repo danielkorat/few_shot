@@ -23,6 +23,7 @@ from operator import itemgetter
 from extract_aspects import extract_aspects, generate_bio, get_fm_pipeline, PretokenizedTokenizer
 import spacy
 from patterns import PATTERNS, SCORING_PATTERNS
+import ast
 
 logging.disable(logging.WARNING)
 
@@ -74,30 +75,21 @@ def load_dataset(csv_url, json_url, multi_token=False):
         ds.append((text, tokens, labels, aspects))
     return ds
 
-
-def load_all_datasets(verbose=False, train_size=200):
+def load_datasets(split, domain,  train_size):
     makedirs(str(ROOT / 'data'), exist_ok=True)
-    if not os.path.exists(ROOT / "data" / f"lap_train_{train_size}.json"):   
-        for domain_name, domain in zip(DOMAIN_NAMES, ('restaurants', 'laptops')):
-            ds = load_dataset(f"{domain}.csv", f"{domain}/{domain}_train_sents.json")
-            if verbose:
-                print(f'{domain} (size={len(ds)}):\n')
-                for ex in ds[:5]:
-                    print(ex[0], ex[3])
+    print("Loading dataset from json...")
+    
+    #datasets = {f"{domain}":{dtype: {f"split{split}":"empty" for split in list(range(1,num_splits+1))} for dtype in ["train", "test"]}}
+    datasets = {f"{domain}":{dtype: {f"split{split}":"empty"} for dtype in ["train", "test"]}}
 
-            train, test = ds[:train_size], ds[train_size:]
-            print(f"{domain} size (train/test): {len(train)}/{len(test)}")
+    for dtype in ["train", "test"]:
+        file_name = ROOT / "data" /f"{domain}"/ "asp" / f"{train_size}" / f"{dtype}_split{split}.json"
+        json_lines =[]
+        for line in open(file_name, 'r'):
+            json_lines.append(json.loads(line))
+            datasets[domain][dtype][f"split{split}"] = json_lines
 
-            print("Writing datest to json...")
-            with open(ROOT / "data" / "{domain_name}_train_{train_size}.json", 'w') as train_f:
-                json.dump(train, train_f, indent=2)
-            with open(ROOT / "data" / f"{domain_name}_test_{train_size}.json", 'w') as test_f:
-                json.dump(test, test_f, indent=2)
-    else:
-        print("Loading dataset from json...")
-    return {domain: {split: json.load(open(ROOT / "data" / f"{domain}_{split}_{train_size}.json")) \
-        for split in ('train', 'test')} for domain in DOMAIN_NAMES}
-
+    return datasets
 
 def run_ds_examples(ds, model_name, pattern_name, **kwargs):
     print(f"Pattern: {kwargs['pattern']}\n")
@@ -201,10 +193,10 @@ def run_example(text, tokens, top_k=10, thresh=-1, target=True, **kwargs):
     return preds, valid_preds, pred_bio, preds_meta, hparams
 
 
-def eval_ds(ds_dict, test_domain, pattern_names, model_names, scoring_model_names=None,
+def eval_ds(split, ds_dict, test_domain, pattern_names, model_names, scoring_model_names=None,
         scoring_patterns=None, test_limit=None, **kwargs):
 
-    test_data = ds_dict[test_domain]['test'][:test_limit]
+    test_data = ds_dict[test_domain]['test'][f"split{split}"][:test_limit]
     all_gold_bio = []
 
     # in case of pre-trained model evaluation
@@ -224,7 +216,8 @@ def eval_ds(ds_dict, test_domain, pattern_names, model_names, scoring_model_name
 
         all_preds_bio, all_preds = [], []
         err_analysis_list=[]
-        for text, tokens, gold_bio, aspects in tqdm(test_data):
+        for line in tqdm(test_data):
+            tokens, gold_bio, text = line['tokens'], line['tags'], line['text']
             preds, preds_bio, hparams = extract_aspects(fm_pipeline=fm_pipeline, scoring_pipelines=scoring_pipelines,
                 text=text, tokens=tokens,\
                 pattern_names=(pattern_name,), scoring_patterns=scoring_patterns, **kwargs)
@@ -241,7 +234,7 @@ def eval_ds(ds_dict, test_domain, pattern_names, model_names, scoring_model_name
 
         # write predictions to file
         makedirs(ROOT / 'predictions', exist_ok=True)
-        with open(ROOT / 'predictions' / f'{model_name}_{pattern_name}_{test_domain}.json', 'w') as f:
+        with open(ROOT / 'predictions' / f'{model_name}_{scoring_patterns[0]}_{test_domain}_split{split}.json', 'w') as f:
             json.dump((all_preds), f, indent=2)
 
         all_preds_list.append(all_preds)
@@ -257,8 +250,7 @@ def eval_ds(ds_dict, test_domain, pattern_names, model_names, scoring_model_name
             final_preds_bio.append(bio)
 
     err_analysis_list = evaluate_term(test_data, final_preds_bio)
-    
-    preds_fname = f"{model_names[0]}_{test_domain}"
+    preds_fname = f"{scoring_patterns[0]}_{test_domain}_split{split}"
     if len(model_names) > 1:
         preds_fname = preds_fname.replace(pattern_names[0], '+'.join(pattern_names))
 
@@ -280,7 +272,8 @@ def evaluate_term(test_data, all_preds_bio):
     err_analysis_list=[]
     i=0
     
-    for text, tokens, gold_bio, _ in test_data :
+    for line in test_data :
+        tokens, gold_bio, text = line['tokens'], line['tags'], line['text']
         preds_bio = all_preds_bio[i]
         j=0
         for p_bio, g_bio in zip(preds_bio, gold_bio):
@@ -300,9 +293,9 @@ def evaluate_term(test_data, all_preds_bio):
     return err_analysis_list 
 
 def evaluate(test_domains, pattern_names, model_names, **kwargs):
-    ds_dict = load_all_datasets()
+    ds_dict = load_datasets()
     all_res = {}
-    
+    split=1
     eval_fname = model_names[0]
 
     if len(model_names) > 1:
@@ -311,7 +304,7 @@ def evaluate(test_domains, pattern_names, model_names, **kwargs):
     makedirs(ROOT / 'eval', exist_ok=True)
     with open(ROOT / "eval" / f"{eval_fname}.txt", 'w') as eval_f:
         for i, test_domain in enumerate(test_domains):
-            res = eval_ds(ds_dict=ds_dict, model_names=model_names, test_domain=test_domain, 
+            res = eval_ds(split=1, ds_dict=ds_dict, model_names=model_names, test_domain=test_domain, 
                 pattern_names=pattern_names, **kwargs)
             all_res[test_domain] = res
             p, r, f1 = [f"{100. * res['metrics'][m]:.2f}" for m in ('Precision', 'Recall', 'F1')]
@@ -369,14 +362,15 @@ def replace_mask_scoring_pattern(f, P, x, replace_aspects, replace_mask_token, a
         mask_idx = get_mask_positions(tokenizer, example)
         example = example.replace('<mask>', replace_mask_token)
         if append_label_id:
-            line = '#'.join([example, append_label_id, str(mask_idx)])
+            line = '#--#'.join([example, append_label_id, str(mask_idx)])
         f.write(line + '\n')
     return unique_count, count
 
-def create_mlm_train_sets(datasets, num_labelled, sample_selection, pattern_names, train_domains, masking_strategy, model_name, **kwargs):
+def create_mlm_train_sets(datasets, split, num_labelled, sample_selection, pattern_names, train_domains, masking_strategy, model_name, **kwargs):
     actual_num_labelled = {}
     makedirs(ROOT / 'mlm_data', exist_ok=True)
     
+    print("Creating mlm file for split #",split)
     for train_domain in train_domains:
         for pattern_name in pattern_names:
             if masking_strategy == 'aspect_masking':  
@@ -384,8 +378,9 @@ def create_mlm_train_sets(datasets, num_labelled, sample_selection, pattern_name
             elif masking_strategy == 'aspect_scoring':  
                 P = apply_pattern(SCORING_PATTERNS[pattern_name])
             
-            train_samples = datasets[train_domain]['train']
-            exper_str = f"{train_domain}_train_{num_labelled}_{pattern_name}"
+            train_samples = datasets[train_domain]['train'][f"split{split}"]  
+
+            exper_str = f"{train_domain}_train_{num_labelled}_{pattern_name}_split{split}"
             out_path = ROOT / 'mlm_data' / f'{exper_str}.txt'
 
             args = train_samples, out_path, P
@@ -410,7 +405,9 @@ def create_mlm_train_sets(datasets, num_labelled, sample_selection, pattern_name
 
                 with open(out_path, 'w') as f:            
                     #for txt, *_, gold_aspects in train_samples[:num_labelled]:
-                    for txt, tokens, _ , gold_aspects in train_samples[:num_labelled]:    
+                    for sample in train_samples:
+                        tokens, bio_tags, txt = sample['tokens'], sample['tags'], sample['text']                          
+                        gold_aspects = extract_gold_spects(tokens, bio_tags)  
                         # create positive examples
                         replace_mask_scoring_pattern(f, P, txt, \
                             replace_aspects=gold_aspects, replace_mask_token='Yes', append_label_id='1', tokenizer=tokenizer)
@@ -426,6 +423,13 @@ def create_mlm_train_sets(datasets, num_labelled, sample_selection, pattern_name
 
     return actual_num_labelled
 
+def extract_gold_spects(tokens, bio_tags):
+    gold_aspects = []
+    for i in range(len(bio_tags)):
+        if bio_tags[i] == "B-ASP":
+          gold_aspects.append(tokens[i])  
+
+    return(gold_aspects)
 
 def plot_per_domain(res_dicts, hparam, values, title):
     fig, axs = plt.subplots(1, 2, figsize=(20, 6), sharey=True)
@@ -494,7 +498,39 @@ def create_asp_only_data_files(in_file_name, out_file_name):
         f.write(
             '\n'.join(json.dumps(i) for i in lines))
 
-        #json.dump((lines), f, indent=2)
+def create_new_data_files(tokens_lables_file, sentences_file, out_file):
+
+    print("opening data files")
+    # 1. read tokens and labels file
+    with open(tokens_lables_file, encoding='utf-8') as input_f:
+        toks, labels = [], []
+        toks_all = []
+        labels_all=[]
+        for line in input_f:
+            line = line.strip()
+            if not line:
+                #yield tuple(toks), tuple(labels)
+                toks_all.append(toks)
+                labels_all.append(labels)
+                toks, labels = [], []    
+            else:
+                split = line.split('\t')
+                labels.append(split[1])
+                toks.append(split[0])
+    # 2. read raw senteces file
+    sentences_all=[]
+    with open(sentences_file) as sentences_f:
+        for line in sentences_f:
+            sentences_all.append(line.rstrip())
+
+    lines = []
+    for toks,lables, snetence in zip(toks_all, labels_all, sentences_all):
+        lines.append({"tokens": toks, "tags": lables, "text": snetence})
+
+    with open(ROOT / out_file, 'w') as f:
+        f.write(
+            '\n'.join(json.dumps(i) for i in lines))
+    print ("finished writng json file")
 
 def detailed_metrics(y_gold, y_pred):
     """Calculate the main classification metrics for every label type.

@@ -65,7 +65,7 @@ def extract_aspects(fm_pipeline, scoring_pipelines, text, tokens, pattern_names,
         preds, pred_bio = extract_candidate_aspects(fm_pipeline, text, tokens, pattern_names,
                                                     top_k, thresh, target_flag=True, **kwargs)
     else:    
-        preds, pred_bio = extract_candidate_aspects_as_nouns(text, tokens)
+        preds, pred_bio = extract_candidate_aspects_as_nouns(tokens)
        
     if scoring_patterns:
         preds, pred_bio = aspect_scoring(text, tokens, preds, scoring_pipelines, scoring_patterns, top_k)
@@ -134,7 +134,7 @@ def extract_candidate_aspects(fm_pipeline, text, tokens, pattern_names,
 
     return preds, pred_bio
 
-def extract_candidate_aspects_as_nouns(text, tokens):
+def extract_candidate_aspects_as_nouns(tokens):
     # spacy uses tokens list as input (no spacy tokenization)
     nouns = [(ent.text,ent.i) for ent in spacy_model(tokens) if ent.pos_ == 'NOUN' or ent.pos_ =='PROPN']
 
