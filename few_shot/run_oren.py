@@ -75,7 +75,7 @@ def train_scoring_pattern(split, train_sizes, **kwargs):
     return trained_models
 
 
-def eval(scoring_models, test_domain, split, train_size, scoring_pattern, pattern):
+def eval(scoring_models, test_domain, split, train_size, scoring_pattern, pattern, test_len_limit):
     pattern_kwargs = dict(pattern='P5', top_k=10, step_1_nouns_only=True)
     
     data = load_datasets(split, test_domain,  train_size) 
@@ -89,12 +89,12 @@ def eval(scoring_models, test_domain, split, train_size, scoring_pattern, patter
     
     #scoring_patterns=None
     for pattern_names in pattern_groups:
-        eval_results = eval_ds(split, data, test_domain=test_domain, pattern_names=pattern_names, model_names=model_names, scoring_model_names=scoring_models, 
-            scoring_patterns=scoring_patterns, **pattern_kwargs)
+        eval_results = eval_ds(split, data, test_domain=test_domain, pattern_names=pattern_names, model_names=model_names, 
+        scoring_model_names=scoring_models, scoring_patterns=scoring_patterns, test_len_limit=test_len_limit, **pattern_kwargs)
         print("Stats:", eval_results['metrics'], "   Patterns: ", pattern_names)
     return eval_results['metrics']
 
-def main(smoke):
+def main(smoke, inference_only):
 
     if smoke:
         alphas, domains, train_sizes = [0], ['rest', 'lap'], [16]
@@ -108,49 +108,39 @@ def main(smoke):
         domains = ['rest']
         splits = [1]
         train_sizes = [100]
+        # limit test size for quicker test
+        test_len_limit = 500
         kwargs = {}
         #kwargs = dict(max_steps=5)
+
+    if inference_only:
+        scoring_models = ["models/scoring_P_B13_rest_100_split1"]
 
     pattern='P5'
     scoring_pattern = 'P_B13'
     timestamp = datetime.now().strftime("%Y_%m_%d-%I:%M")
 
     for domain, alpha, train_size, split in product(domains, alphas, train_sizes, splits):
-        scoring_models = train_scoring_pattern(split, pattern_names=(scoring_pattern,), 
-            train_sizes=[train_size], sample_selection='negatives_with_none',
-            model_name='roberta-base', train_domains=[domain], test_domains=[domain],
-            masking_strategy='aspect_scoring', alpha=alpha, **kwargs)
+        if not inference_only:
+            scoring_models = train_scoring_pattern(split, pattern_names=(scoring_pattern,), 
+                train_sizes=[train_size], sample_selection='negatives_with_none',
+                model_name='roberta-base', train_domains=[domain], test_domains=[domain],
+                masking_strategy='aspect_scoring', alpha=alpha, **kwargs)
 
-        print("scoring_models:", scoring_models)
+            print("scoring_models:", scoring_models)
 
-        res = eval(scoring_models, domain, split, train_size, scoring_pattern, pattern)
+        res = eval(scoring_models, domain, split, train_size, scoring_pattern, pattern, test_len_limit)
 
-        with open(f'results_{timestamp}.txt', 'a') as f:
+        with open(f'performance/results_{timestamp}.txt', 'a') as f:
             f.write(f"domain: {domain}, scoring_pattern: {scoring_pattern}, alpha: {alpha}, train_size: {train_size}, split: {split}\n{res}\n\n")  
 
            
     #create_asp_only_data_files("rest/asp+op/rest_all.json", "rest/asp/rest_all.json")
     
     #create_new_data_files("data/rest/asp+op/rest_all.txt", "data/rest/asp+op/rest_all_sentences.txt", "data/rest/asp+op/rest_all.json")
-    
-
-
-def run_eval_only():
-
-    domain = 'rest'
-    splits = [1]
-    train_size = '100'
-    pattern='P5'
-    scoring_pattern = 'P_B13'
-    scoring_models = ["models/scoring_P_B13_rest_100_split1"] 
-    timestamp = datetime.now().strftime("%Y_%m_%d-%I:%M")
-
-    for split in splits:
-        res = eval(scoring_models, domain, split, train_size, scoring_pattern, pattern)
-        with open(f'results_{timestamp}.txt', 'a') as f:
-            f.write(f"domain: {domain}, scoring_pattern: {scoring_pattern}, split: {split}\n{res}\n\n")  
+     
 
 if __name__ == "__main__":
     #run_eval_only()
-    main(smoke=False)
+    main(smoke=False, inference_only=True)
     #plot_few_shot('lap', *pickle.load(open(f'lap_plot_data.pkl', 'rb')), "dfgdf")

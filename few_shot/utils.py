@@ -109,20 +109,6 @@ def eval_metrics(gold, preds, domain, verbose=False, **kwargs):
 
     return {'Precision': round(P,3), 'Recall': round(R,3), 'F1': round(F,3)}
 
-# def our_eval_metrics(gold, preds, verbose=False, **kwargs):
-
-    TP, FP, FN = 0, 0, 0
-    for g, p in zip(gold, preds):
-        len_g = len(gold)
-        for i in enumerate(len_g)-1:
-            if p(i) == "B-ASP" and g(i) == "B-ASP" and p(i+1) == "O" and g(i+1) == "O":
-                TP += 1
-                
-    if verbose:
-        print(f'{domain}')
-        print(f'F1: {round(F, 3):.3f}, P: {P:.3f}, R: {R:.3f}, {conf}')
-
-    return {'Precision': round(P,3), 'Recall': round(R,3), 'F1': round(F,3)}
 
 def post_eval(ds_dict, domain, thresh=-1, **kwargs):
     with open(f'{domain}.pkl', 'rb') as f:
@@ -194,9 +180,9 @@ def run_example(text, tokens, top_k=10, thresh=-1, target=True, **kwargs):
 
 
 def eval_ds(split, ds_dict, test_domain, pattern_names, model_names, scoring_model_names=None,
-        scoring_patterns=None, test_limit=None, **kwargs):
+        scoring_patterns=None, test_len_limit=None, **kwargs):
 
-    test_data = ds_dict[test_domain]['test'][f"split{split}"][:test_limit]
+    test_data = ds_dict[test_domain]['test'][f"split{split}"][:test_len_limit]
     all_gold_bio = []
 
     # in case of pre-trained model evaluation
@@ -249,7 +235,8 @@ def eval_ds(split, ds_dict, test_domain, pattern_names, model_names, scoring_mod
             bio = generate_bio(tokens=tokens, preds=list({p for preds in all_preds for p in preds}))
             final_preds_bio.append(bio)
 
-    err_analysis_list = evaluate_term(test_data, final_preds_bio)
+    err_analysis_list =  evaluate_term_multi_token(test_data, final_preds_bio)
+    #err_analysis_list = evaluate_term(test_data, final_preds_bio)
     preds_fname = f"{scoring_patterns[0]}_{test_domain}_split{split}"
     if len(model_names) > 1:
         preds_fname = preds_fname.replace(pattern_names[0], '+'.join(pattern_names))
@@ -265,6 +252,9 @@ def eval_ds(split, ds_dict, test_domain, pattern_names, model_names, scoring_mod
         sorted_err_analysis_list = sorted(err_analysis_list, key=lambda i: (i['Eval_type'], i['Term']))
         for data in sorted_err_analysis_list:
             writer.writerow(data)
+
+    eval_results, macro_avg = detailed_metrics(all_gold_bio, final_preds_bio)
+    print("detailed_metrics: ", eval_results)
 
     return {'metrics': eval_metrics(all_gold_bio, final_preds_bio, test_domain, **kwargs), 'hparams': hparams}
 
@@ -291,6 +281,58 @@ def evaluate_term(test_data, all_preds_bio):
         i=i+1
 
     return err_analysis_list 
+
+def evaluate_term_multi_token(test_data, all_preds_bio):
+
+    y_pred=[]
+    for row in all_preds_bio:
+        for tag in row:
+            y_pred.append(tag)   
+
+    texts_idxes = []
+    y_gold = []
+    tokens_list = []
+    i = 0
+    for line in test_data:
+        for gold_bio, token in zip(line['tags'], line['tokens']):
+            y_gold.append(gold_bio)
+            tokens_list.append(token)
+            texts_idxes.append(i)
+        i=i+1
+   
+    gold_entities = set(get_entities(y_gold))
+    pred_entities = set(get_entities(y_pred))
+    d1 = defaultdict(set)
+    d2 = defaultdict(set)
+    for e in gold_entities:
+        d1[e[0]].add((e[1], e[2]))
+    for e in pred_entities:
+        d2[e[0]].add((e[1], e[2]))
+
+    
+    err_analysis_list=[]
+    for type_name, gold_entities in d1.items():
+        pred_entities = d2[type_name]
+        for pred_ent in pred_entities:
+            if pred_ent in gold_entities:
+                eval_type = 'TP'
+            else:  
+                eval_type = 'FP'
+            tokens = ' '.join(tokens_list[pred_ent[0]:pred_ent[-1]+1])
+            text = test_data[texts_idxes[pred_ent[0]]]['text']  
+            err_analysis_list.append({'Eval_type':eval_type, 'Term': tokens, 'Text':text })
+
+        for gold_ent in gold_entities:
+            if gold_ent not in pred_entities:
+                eval_type = 'FN'
+                tokens = ' '.join(tokens_list[gold_ent[0]:gold_ent[-1]+1])
+                text = test_data[texts_idxes[gold_ent[0]]]['text']  
+                err_analysis_list.append({'Eval_type':eval_type, 'Term': tokens, 'Text':text })
+
+    return err_analysis_list
+
+            
+   
 
 def evaluate(test_domains, pattern_names, model_names, **kwargs):
     ds_dict = load_datasets()
