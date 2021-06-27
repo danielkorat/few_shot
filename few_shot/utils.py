@@ -460,7 +460,7 @@ def create_mlm_train_sets(datasets, split, num_labelled, sample_selection, patte
                         
                         noun_compounds, _ = extract_candidate_aspects_as_noun_compounds(tokens)
 
-                        non_asps = extract_non_spects(noun_compounds, gold_aspects)
+                        non_asps = extract_non_aspects(noun_compounds, gold_aspects)
 
                         #non_asps = [x for x in noun_compounds if x not in gold_aspects] 
                         if non_asps:
@@ -490,7 +490,7 @@ def extract_gold_entities_multi_token(tokens, gold_bio_tags):
 
     return gold_entities    
 
-def extract_non_spects(noun_compounds, gold_aspects):
+def extract_non_aspects(noun_compounds, gold_aspects):
     non_asps = []
     for noun_comp in noun_compounds:
         nn_idx_range = noun_comp[1]
@@ -506,7 +506,7 @@ def extract_non_spects(noun_compounds, gold_aspects):
 
     return(non_asps)
 
-    
+
 def plot_per_domain(res_dicts, hparam, values, title):
     fig, axs = plt.subplots(1, 2, figsize=(20, 6), sharey=True)
     fig.suptitle(title, fontsize=20)
