@@ -460,19 +460,7 @@ def create_mlm_train_sets(datasets, split, num_labelled, sample_selection, patte
                         
                         noun_compounds, _ = extract_candidate_aspects_as_noun_compounds(tokens)
 
-                        non_asps = []
-                        for noun_comp in noun_compounds:
-                            nn_idx_range = noun_comp[1]
-                            non_asp_flag = True
-                            for gold_asp in gold_aspects: 
-                                gold_idx_range = list(range(gold_asp[1], gold_asp[2]+1))
-                                for idx in list(range(nn_idx_range[0], nn_idx_range[1]+1)):
-                                    if idx in gold_idx_range: 
-                                        non_asp_flag = False
-
-                            if non_asp_flag:
-                                non_asps.append(noun_comp[0]) 
-   
+                        non_asps = extract_non_spects(noun_compounds, gold_aspects)
 
                         #non_asps = [x for x in noun_compounds if x not in gold_aspects] 
                         if non_asps:
@@ -502,7 +490,23 @@ def extract_gold_entities_multi_token(tokens, gold_bio_tags):
 
     return gold_entities    
 
+def extract_non_spects(noun_compounds, gold_aspects):
+    non_asps = []
+    for noun_comp in noun_compounds:
+        nn_idx_range = noun_comp[1]
+        non_asp_flag = True
+        for gold_asp in gold_aspects: 
+            gold_idx_range = list(range(gold_asp[1], gold_asp[2]+1))
+            for idx in list(range(nn_idx_range[0], nn_idx_range[1]+1)):
+                if idx in gold_idx_range: 
+                    non_asp_flag = False
 
+        if non_asp_flag:
+            non_asps.append(noun_comp[0])
+
+    return(non_asps)
+
+    
 def plot_per_domain(res_dicts, hparam, values, title):
     fig, axs = plt.subplots(1, 2, figsize=(20, 6), sharey=True)
     fig.suptitle(title, fontsize=20)
