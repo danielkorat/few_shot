@@ -109,6 +109,7 @@ def main(smoke, inference_only):
         splits = [1]
         train_sizes = [100]
         # limit test size for quicker test
+        #test_len_limit = None
         test_len_limit = 500
         kwargs = {}
         #kwargs = dict(max_steps=5)
@@ -131,7 +132,7 @@ def main(smoke, inference_only):
 
         res = eval(scoring_models, domain, split, train_size, scoring_pattern, pattern, test_len_limit)
 
-        with open(f'performance/results_{timestamp}.txt', 'a') as f:
+        with open(f'predictions/results_{timestamp}.txt', 'a') as f:
             f.write(f"domain: {domain}, scoring_pattern: {scoring_pattern}, alpha: {alpha}, train_size: {train_size}, split: {split}\n{res}\n\n")  
 
            

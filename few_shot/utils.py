@@ -20,7 +20,7 @@ from matplotlib import pyplot as plt
 import numpy as np
 import seaborn as sns
 from operator import itemgetter
-from extract_aspects import extract_aspects, generate_bio, get_fm_pipeline, PretokenizedTokenizer
+from extract_aspects import extract_aspects, generate_bio, get_fm_pipeline, PretokenizedTokenizer, extract_candidate_aspects_as_noun_compounds
 import spacy
 from patterns import PATTERNS, SCORING_PATTERNS
 import ast
@@ -309,7 +309,6 @@ def evaluate_term_multi_token(test_data, all_preds_bio):
     for e in pred_entities:
         d2[e[0]].add((e[1], e[2]))
 
-    
     err_analysis_list=[]
     for type_name, gold_entities in d1.items():
         pred_entities = d2[type_name]
@@ -449,14 +448,33 @@ def create_mlm_train_sets(datasets, split, num_labelled, sample_selection, patte
                     #for txt, *_, gold_aspects in train_samples[:num_labelled]:
                     for sample in train_samples:
                         tokens, bio_tags, txt = sample['tokens'], sample['tags'], sample['text']                          
-                        gold_aspects = extract_gold_spects(tokens, bio_tags)  
+                        #gold_aspects = extract_gold_spects_single_token(tokens, bio_tags) 
+                        gold_entities = extract_gold_entities_multi_token(tokens, bio_tags) 
+                        gold_aspects =[ent[1:] for ent in gold_entities if ent[0]=='ASP']
+                        gols_asp_tokens = [ent[1] for ent in gold_entities if ent[0]=='ASP']
                         # create positive examples
                         replace_mask_scoring_pattern(f, P, txt, \
-                            replace_aspects=gold_aspects, replace_mask_token='Yes', append_label_id='1', tokenizer=tokenizer)
+                            replace_aspects=gols_asp_tokens, replace_mask_token='Yes', append_label_id='1', tokenizer=tokenizer)
                         # create negative examples: extract non-aspect nouns     
-                        nouns = [ent.text for ent in spacy_model(tokens) if ent.pos_ == 'NOUN' or ent.pos_ =='PROPN']
-                        #nouns = [ent.text for ent in spacy_model(txt) if ent.pos_ == 'NOUN' or ent.pos_ =='PROPN']
-                        non_asps = [x for x in nouns if x not in gold_aspects] 
+                        #nouns = [ent.text for ent in spacy_model(tokens) if ent.pos_ == 'NOUN' or ent.pos_ =='PROPN']
+                        
+                        noun_compounds, _ = extract_candidate_aspects_as_noun_compounds(tokens)
+
+                        non_asps = []
+                        for noun_comp in noun_compounds:
+                            nn_idx_range = noun_comp[1]
+                            non_asp_flag = True
+                            for gold_asp in gold_aspects: 
+                                gold_idx_range = list(range(gold_asp[1], gold_asp[2]+1))
+                                for idx in list(range(nn_idx_range[0], nn_idx_range[1]+1)):
+                                    if idx in gold_idx_range: 
+                                        non_asp_flag = False
+
+                            if non_asp_flag:
+                                non_asps.append(noun_comp[0]) 
+   
+
+                        #non_asps = [x for x in noun_compounds if x not in gold_aspects] 
                         if non_asps:
                             replace_mask_scoring_pattern(f, P, txt, \
                                 replace_aspects=non_asps, replace_mask_token='No', append_label_id='0', tokenizer=tokenizer) 
@@ -465,13 +483,25 @@ def create_mlm_train_sets(datasets, split, num_labelled, sample_selection, patte
 
     return actual_num_labelled
 
-def extract_gold_spects(tokens, bio_tags):
+def extract_gold_spects_single_token(tokens, bio_tags):
     gold_aspects = []
     for i in range(len(bio_tags)):
         if bio_tags[i] == "B-ASP":
           gold_aspects.append(tokens[i])  
 
     return(gold_aspects)
+
+
+def extract_gold_entities_multi_token(tokens, gold_bio_tags):
+    
+    gold_tags = set(get_entities(gold_bio_tags))
+    gold_entities = []
+    for gold_tag in gold_tags: 
+        entity_tokens = (' '.join(tokens[gold_tag[1]:gold_tag[2]+1])) 
+        gold_entities.append([gold_tag[0], entity_tokens, gold_tag[1], gold_tag[2]]) 
+
+    return gold_entities    
+
 
 def plot_per_domain(res_dicts, hparam, values, title):
     fig, axs = plt.subplots(1, 2, figsize=(20, 6), sharey=True)

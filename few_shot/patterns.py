@@ -32,7 +32,7 @@ P_B10 ="So my review towards the <aspect> is <mask>"
 P_B11 ="Is <aspect> the aspect in the previous sentence? <mask>"
 
 P_B12 ="Is there sentiment towards <aspect> in the previous sentence? <mask>"
-P_B13 ="So, does the review in the previous sentence focuses on <aspect>? <mask>"
+P_B13 ="So, does the review in the previous sentence focus on <aspect>? <mask>"
 P_B14 ="So, is <aspect> the topic of my review? <mask>"
 P_B15 ="does this review focuses on <aspect>? <mask>"
 P_B16 ="So, is <aspect> the aspect in the previous sentence? <mask>"

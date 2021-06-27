@@ -65,8 +65,9 @@ def extract_aspects(fm_pipeline, scoring_pipelines, text, tokens, pattern_names,
         preds, pred_bio = extract_candidate_aspects(fm_pipeline, text, tokens, pattern_names,
                                                     top_k, thresh, target_flag=True, **kwargs)
     else:    
-        preds, pred_bio = extract_candidate_aspects_as_nouns(tokens)
-       
+        #preds, pred_bio = extract_candidate_aspects_as_nouns(tokens)
+        preds, pred_bio = extract_candidate_aspects_as_noun_compounds(tokens)
+        
     if scoring_patterns:
         preds, pred_bio = aspect_scoring(text, tokens, preds, scoring_pipelines, scoring_patterns, top_k)
        
@@ -77,7 +78,7 @@ def aspect_scoring(text, tokens, preds, scoring_pipelines, scoring_patterns, top
     valid_preds=[]
 
     for pred in preds:
-        aspect_token = pred[0]
+        aspect_tokens = pred[0]
         #target_terms=['good', 'great', 'amazing', 'bad', 'awful', 'horrible']
         #target_terms=['positive', 'negative', 'neutral', 'ok', 'none']
         target_terms=['Yes', 'No']
@@ -86,7 +87,7 @@ def aspect_scoring(text, tokens, preds, scoring_pipelines, scoring_patterns, top
         pos_scores, neg_scores = [], []
         for scoring_pipeline, scoring_pattern in zip(scoring_pipelines, scoring_patterns):
             pattern = SCORING_PATTERNS[scoring_pattern]
-            mask_preds = fill_mask_preds(scoring_pipeline, text, target_terms, pattern, top_k, target_flag=True, aspect_token=aspect_token)
+            mask_preds = fill_mask_preds(scoring_pipeline, text, target_terms, pattern, top_k, target_flag=True, aspect_token=aspect_tokens)
             if mask_preds[0]['token_str']==' Yes':
                 pos_scores.append(mask_preds[0]['score'])
                 neg_scores.append(mask_preds[1]['score'])
@@ -97,12 +98,23 @@ def aspect_scoring(text, tokens, preds, scoring_pipelines, scoring_patterns, top
         if (np.mean(pos_scores)>np.mean(neg_scores)):
             valid_preds.append(pred)
         
-        #calc pred_bio again
+    #calc pred_bio again
+    pred_bio = generate_bio_tags(valid_preds, len(tokens))
     preds = [item[0] for item in valid_preds]
-    idx_all = [item[1] for item in valid_preds]
-    pred_bio = ['B-ASP' if i in idx_all else 'O' for i in range(len(tokens))] 
 
     return preds, pred_bio
+
+def generate_bio_tags(preds, num_tokens):
+
+    pred_bio = ['O'] * num_tokens
+    idx_all = [item[1] for item in preds]
+    for idx_range in idx_all:
+        # single token noun
+        pred_bio[idx_range[0]] = 'B-ASP'
+        if idx_range[0] != idx_range[1]:
+            pred_bio[idx_range[0]+1:idx_range[1]+1] = ['I-ASP']*(idx_range[1]- idx_range[0])
+
+    return(pred_bio)
 
 def extract_candidate_aspects(fm_pipeline, text, tokens, pattern_names,
                                     top_k=10, thresh=-1, **kwargs):
@@ -138,11 +150,38 @@ def extract_candidate_aspects_as_nouns(tokens):
     # spacy uses tokens list as input (no spacy tokenization)
     nouns = [(ent.text,ent.i) for ent in spacy_model(tokens) if ent.pos_ == 'NOUN' or ent.pos_ =='PROPN']
 
-    #preds = [item[0] for item in nouns]
     idx_all = [item[1] for item in nouns]
     pred_bio = ['B-ASP' if i in idx_all else 'O' for i in range(len(tokens))]    
 
     return nouns, pred_bio
+
+def extract_candidate_aspects_as_noun_compounds(tokens):
+    # spacy uses tokens list as input (no spacy tokenization)
+    nouns = [(ent.text,ent.i) for ent in spacy_model(tokens) if ent.pos_ == 'NOUN' or ent.pos_ =='PROPN']
+    # filter out single token nouns
+    nouns = [noun for noun in nouns if len(noun[0]) >1]
+
+    #preds_all = [item[0] for item in nouns]
+    nouns_compounds = []
+    pred_bio = ['O'] * len(tokens)
+    idx_all = [item[1] for item in nouns]
+    idx_ranges = find_ranges(idx_all)
+    for idx_range in idx_ranges:
+        noun_comp=(' '.join(tokens[idx_range[0]:idx_range[1]+1]))
+        nouns_compounds.append((noun_comp, idx_range)) 
+        # single token noun
+        pred_bio[idx_range[0]] = 'B-ASP'
+        if idx_range[0] != idx_range[1]:
+            pred_bio[idx_range[0]+1:idx_range[1]+1] = ['I-ASP']*(idx_range[1]- idx_range[0])
+   
+    return nouns_compounds, pred_bio
+
+
+def find_ranges(idxes):
+    idxes = sorted(set(idxes))
+    gaps = [[s, e] for s, e in zip(idxes, idxes[1:]) if s+1 < e]
+    edges = iter(idxes[:1] + sum(gaps, []) + idxes[-1:])
+    return list(zip(edges, edges))
 
 def fill_mask_preds(fm_pipeline, text, target_terms, pattern, top_k, target_flag, aspect_token=None):
     delim = ' ' if text[-1] in ('.', '!', '?') else '. '
