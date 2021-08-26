@@ -109,8 +109,8 @@ def main(smoke, inference_only):
         splits = [1]
         train_sizes = [100]
         # limit test size for quicker test
-        #test_len_limit = None
-        test_len_limit = 500
+        test_len_limit = None
+        #test_len_limit = 500
         kwargs = {}
         #kwargs = dict(max_steps=5)
 
@@ -121,22 +121,23 @@ def main(smoke, inference_only):
     scoring_pattern = 'P_B13'
     timestamp = datetime.now().strftime("%Y_%m_%d-%I:%M")
 
-    for domain, alpha, train_size, split in product(domains, alphas, train_sizes, splits):
-        if not inference_only:
-            scoring_models = train_scoring_pattern(split, pattern_names=(scoring_pattern,), 
-                train_sizes=[train_size], sample_selection='negatives_with_none',
-                model_name='roberta-base', train_domains=[domain], test_domains=[domain],
-                masking_strategy='aspect_scoring', alpha=alpha, **kwargs)
+    # for domain, alpha, train_size, split in product(domains, alphas, train_sizes, splits):
+    #     if not inference_only:
+    #         scoring_models = train_scoring_pattern(split, pattern_names=(scoring_pattern,), 
+    #             train_sizes=[train_size], sample_selection='negatives_with_none',
+    #             model_name='roberta-base', train_domains=[domain], test_domains=[domain],
+    #             masking_strategy='aspect_scoring', alpha=alpha, **kwargs)
 
-            print("scoring_models:", scoring_models)
+    #         print("scoring_models:", scoring_models)
 
-        res = eval(scoring_models, domain, split, train_size, scoring_pattern, pattern, test_len_limit)
+    #     res = eval(scoring_models, domain, split, train_size, scoring_pattern, pattern, test_len_limit)
 
-        with open(f'predictions/results_{timestamp}.txt', 'a') as f:
-            f.write(f"domain: {domain}, scoring_pattern: {scoring_pattern}, alpha: {alpha}, train_size: {train_size}, split: {split}\n{res}\n\n")  
+    #     with open(f'predictions/results_{timestamp}.txt', 'a') as f:
+    #         f.write(f"domain: {domain}, scoring_pattern: {scoring_pattern}, alpha: {alpha}, train_size: {train_size}, split: {split}\n{res}\n\n")  
 
            
     #create_asp_only_data_files("rest/asp+op/rest_all.json", "rest/asp/rest_all.json")
+    create_asp_only_data_files("lap/asp+op/lap_all.json", "lap/asp/lap_all.json")
     
     #create_new_data_files("data/rest/asp+op/rest_all.txt", "data/rest/asp+op/rest_all_sentences.txt", "data/rest/asp+op/rest_all.json")
      
@@ -144,4 +145,6 @@ def main(smoke, inference_only):
 if __name__ == "__main__":
     #run_eval_only()
     main(smoke=False, inference_only=True)
+    
+
     #plot_few_shot('lap', *pickle.load(open(f'lap_plot_data.pkl', 'rb')), "dfgdf")

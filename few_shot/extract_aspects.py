@@ -68,8 +68,8 @@ def extract_aspects(fm_pipeline, scoring_pipelines, text, tokens, pattern_names,
         #preds, pred_bio = extract_candidate_aspects_as_nouns(tokens)
         preds, pred_bio = extract_candidate_aspects_as_noun_compounds(tokens)
         
-    if scoring_patterns:
-        preds, pred_bio = aspect_scoring(text, tokens, preds, scoring_pipelines, scoring_patterns, top_k)
+    #if scoring_patterns:
+    #    preds, pred_bio = aspect_scoring(text, tokens, preds, scoring_pipelines, scoring_patterns, top_k)
        
     return preds, pred_bio, hparams
 
