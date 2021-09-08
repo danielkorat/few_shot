@@ -58,7 +58,7 @@ pathy==0.3.4
 patsy==0.5.1
 pexpect==4.8.0
 pickleshare==0.7.5
-Pillow==8.1.0
+Pillow==8.3.2
 plac==1.1.3
 plotly==4.14.3
 plotly-utils==0.0.3
